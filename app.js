@@ -440,28 +440,44 @@ function parseAiJson(text) {
   return JSON.parse(m[0]);
 }
 
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'];
+
+function friendlyGeminiError(status, msg) {
+  if (/API key not valid|API_KEY_INVALID|API key expired/i.test(msg))
+    return 'Gemini rejected the key. Re-copy the whole key (starts with AIza) from aistudio.google.com/apikey and paste it again in Settings.';
+  if (status === 429) return 'Free daily AI limit reached — try again in a while.';
+  if (status === 403) return 'This key isn’t allowed here — create a plain key at aistudio.google.com/apikey without website restrictions.';
+  return 'Gemini: ' + msg;
+}
+
 async function geminiEstimate(key, desc) {
   const parts = [];
   if (formPhoto)
     parts.push({ inline_data: { mime_type: 'image/jpeg', data: formPhoto.split(',')[1] } });
   parts.push({ text: aiPrompt(desc) +
     ` Respond with ONLY a JSON object with exactly these keys: ${AI_FIELDS}.` });
-  const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
-    }),
-  });
-  if (!res.ok) {
+  let lastErr = 'Gemini is unavailable right now — try again later.';
+  for (const model of GEMINI_MODELS) {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+      if (!text) throw new Error('No answer returned — try again');
+      return parseAiJson(text);
+    }
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Gemini API error ${res.status}`);
+    const msg = err?.error?.message || `error ${res.status}`;
+    if (res.status === 404) { lastErr = 'Gemini: ' + msg; continue; } // model retired — try the next one
+    throw new Error(friendlyGeminiError(res.status, msg));
   }
-  const data = await res.json();
-  const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
-  if (!text) throw new Error('No answer returned — try again');
-  return parseAiJson(text);
+  throw new Error(lastErr);
 }
 
 async function claudeEstimate(key, desc) {
@@ -511,9 +527,10 @@ async function aiAnalyze() {
   status.textContent = formPhoto ? '✨ Analyzing photo…' : '✨ Estimating from description…';
   $('aiBtn').disabled = true;
   try {
-    const est = key.startsWith('AIza')
-      ? await geminiEstimate(key, desc)
-      : await claudeEstimate(key, desc);
+    let est;
+    if (key.startsWith('AIza')) est = await geminiEstimate(key, desc);
+    else if (key.startsWith('sk-ant')) est = await claudeEstimate(key, desc);
+    else throw new Error('That key doesn’t look like a Gemini key (starts with AIza) or a Claude key (starts with sk-ant) — double-check it in Settings ⚙.');
     if (!$('fName').value.trim()) $('fName').value = est.name || '';
     for (const inp of document.querySelectorAll('#nutrientInputs input')) {
       const v = est[inp.dataset.nkey];
