@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = '1.6';
+const APP_VERSION = '1.7';
 
 /* ---------- Nutrient definitions ----------
    off    = Open Food Facts nutriments key (per 100g, grams except kcal)
@@ -442,44 +442,55 @@ function parseAiJson(text) {
   return JSON.parse(m[0]);
 }
 
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'];
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-2.0-flash'];
 
 function friendlyGeminiError(status, msg) {
   if (/API key not valid|API_KEY_INVALID|API key expired/i.test(msg))
     return 'Gemini rejected the key. Re-copy the whole key (starts with AIza or AQ.) from aistudio.google.com/apikey and paste it again in Settings.';
-  if (status === 429) return 'Free daily AI limit reached — try again in a while.';
+  if (status === 503 || /high demand|overloaded/i.test(msg))
+    return 'Google’s free AI is busy right now — wait a few seconds and tap ✨ again.';
+  if (status === 429) return 'Free AI limit reached for today — try again later.';
   if (status === 403) return 'This key isn’t allowed here — create a plain key at aistudio.google.com/apikey without website restrictions.';
   return 'Gemini: ' + msg;
 }
 
+// Busy/quota/retired responses hop to the next free model; a second pass after
+// a pause covers brief demand spikes before we give up.
 async function geminiEstimate(key, desc) {
   const parts = [];
   if (formPhoto)
     parts.push({ inline_data: { mime_type: 'image/jpeg', data: formPhoto.split(',')[1] } });
   parts.push({ text: aiPrompt(desc) +
     ` Respond with ONLY a JSON object with exactly these keys: ${AI_FIELDS}.` });
-  let lastErr = 'Gemini is unavailable right now — try again later.';
-  for (const model of GEMINI_MODELS) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
-      }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
-      if (!text) throw new Error('No answer returned — try again');
-      return parseAiJson(text);
+  let lastStatus = 503, lastMsg = 'high demand';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    for (const model of GEMINI_MODELS) {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+        if (!text) throw new Error('No answer returned — try again');
+        return parseAiJson(text);
+      }
+      const err = await res.json().catch(() => ({}));
+      const msg = err?.error?.message || `error ${res.status}`;
+      const transient = [404, 429, 503].includes(res.status) || /high demand|overloaded/i.test(msg);
+      if (!transient) throw new Error(friendlyGeminiError(res.status, msg));
+      lastStatus = res.status; lastMsg = msg;
     }
-    const err = await res.json().catch(() => ({}));
-    const msg = err?.error?.message || `error ${res.status}`;
-    if (res.status === 404) { lastErr = 'Gemini: ' + msg; continue; } // model retired — try the next one
-    throw new Error(friendlyGeminiError(res.status, msg));
+    if (attempt === 0) {
+      $('aiStatus').textContent = '✨ Google is busy — retrying…';
+      await new Promise(r => setTimeout(r, 2500));
+    }
   }
-  throw new Error(lastErr);
+  throw new Error(friendlyGeminiError(lastStatus, lastMsg));
 }
 
 async function claudeEstimate(key, desc) {
