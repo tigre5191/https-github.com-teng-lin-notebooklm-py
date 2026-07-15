@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>NutriLog</title>
+<meta name="description" content="Track everything you eat — calories and all nutrients, with photos and barcode scanning.">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#16a34a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NutriLog">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button id="prevDay" class="icon-btn" aria-label="Previous day">‹</button>
+  <button id="dateLabel" class="date-label">Today</button>
+  <button id="nextDay" class="icon-btn" aria-label="Next day">›</button>
+  <button id="settingsBtn" class="icon-btn gear" aria-label="Settings">⚙</button>
+</header>
+
+<main id="main">
+  <!-- Daily totals -->
+  <section class="card totals-card">
+    <div class="kcal-row">
+      <div>
+        <div class="kcal-big"><span id="kcalTotal">0</span></div>
+        <div class="kcal-sub" id="kcalGoalText">calories</div>
+      </div>
+      <div class="kcal-ring"><svg viewBox="0 0 100 100" width="84" height="84">
+        <circle cx="50" cy="50" r="42" class="ring-bg"/>
+        <circle cx="50" cy="50" r="42" class="ring-fg" id="kcalRing"/>
+      </svg><div class="ring-pct" id="kcalPct"></div></div>
+    </div>
+    <div class="macro-grid" id="macroGrid"></div>
+    <button id="toggleNutrients" class="link-btn">Show all nutrients ▾</button>
+    <div id="nutrientTable" class="nutrient-table hidden"></div>
+  </section>
+
+  <!-- Food entries -->
+  <section>
+    <h2 class="section-title">Food log</h2>
+    <div id="entryList" class="entry-list"></div>
+    <p id="emptyMsg" class="empty-msg">Nothing logged yet.<br>Tap <b>+</b> to add your first food.</p>
+  </section>
+</main>
+
+<button id="addBtn" class="fab" aria-label="Add food">+</button>
+
+<!-- Add menu sheet -->
+<div id="addSheet" class="sheet hidden">
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-body">
+    <button class="sheet-opt" id="optScan"><span class="opt-ico">🏷️</span><span>Scan barcode<small>Look up packaged food instantly</small></span></button>
+    <button class="sheet-opt" id="optPhoto"><span class="opt-ico">📷</span><span>Photo<small>Snap a picture of your meal</small></span></button>
+    <button class="sheet-opt" id="optSearch"><span class="opt-ico">🔎</span><span>Search food<small>Find products by name</small></span></button>
+    <button class="sheet-opt" id="optManual"><span class="opt-ico">✏️</span><span>Manual entry<small>Type in nutrition yourself</small></span></button>
+  </div>
+</div>
+
+<!-- Barcode scanner -->
+<div id="scanModal" class="modal hidden">
+  <div class="scan-wrap">
+    <video id="scanVideo" playsinline></video>
+    <div class="scan-frame"></div>
+    <p class="scan-hint">Point at the barcode</p>
+    <p id="scanStatus" class="scan-status"></p>
+    <button id="scanCancel" class="btn btn-light scan-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Search modal -->
+<div id="searchModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h3>Search food</h3><button class="icon-btn" data-close-search>✕</button></div>
+    <div class="search-row">
+      <input id="searchInput" type="search" placeholder="e.g. greek yogurt" autocomplete="off">
+      <button id="searchGo" class="btn btn-primary">Go</button>
+    </div>
+    <div id="searchResults" class="search-results"></div>
+  </div>
+</div>
+
+<!-- Entry form -->
+<div id="entryModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h3 id="entryTitle">Add food</h3><button class="icon-btn" data-close-entry>✕</button></div>
+    <form id="entryForm">
+      <div class="photo-row">
+        <img id="photoPreview" class="photo-preview hidden" alt="">
+        <button type="button" id="photoBtn" class="btn btn-light">📷 Add photo</button>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" hidden>
+      </div>
+      <label>Name<input id="fName" required placeholder="e.g. Oatmeal with banana"></label>
+      <label>Brand <span class="opt">(optional)</span><input id="fBrand" placeholder="e.g. Quaker"></label>
+
+      <div id="amountBlock" class="hidden">
+        <label>Amount eaten (g / ml)<input id="fAmount" type="number" inputmode="decimal" min="0" step="any"></label>
+        <div id="servingBtns" class="serving-btns"></div>
+        <p class="hint">Nutrients below update automatically from the product's per-100g data. You can still edit them.</p>
+      </div>
+
+      <h4 class="form-sub">Nutrition (what you ate)</h4>
+      <div id="nutrientInputs" class="nutrient-inputs"></div>
+      <button type="button" id="moreNutrients" class="link-btn">More nutrients ▾</button>
+
+      <div class="form-actions">
+        <button type="button" id="deleteEntry" class="btn btn-danger hidden">Delete</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Settings -->
+<div id="settingsModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h3>Daily goals</h3><button class="icon-btn" data-close-settings>✕</button></div>
+    <form id="settingsForm">
+      <label>Calories (kcal)<input id="gKcal" type="number" inputmode="numeric" min="0" placeholder="e.g. 2000"></label>
+      <label>Protein (g)<input id="gProtein" type="number" inputmode="numeric" min="0" placeholder="e.g. 120"></label>
+      <label>Carbs (g)<input id="gCarbs" type="number" inputmode="numeric" min="0" placeholder="e.g. 250"></label>
+      <label>Fat (g)<input id="gFat" type="number" inputmode="numeric" min="0" placeholder="e.g. 70"></label>
+      <div class="form-actions"><button type="submit" class="btn btn-primary">Save goals</button></div>
+    </form>
+    <p class="hint">Leave a goal blank to hide its progress bar. All data stays on your phone.</p>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="./vendor/zxing.min.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>
