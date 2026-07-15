@@ -28,6 +28,10 @@ Barcode scans and food searches look up nutrition facts in the free, open
 - **Logging streak** — a 🔥 counter for consecutive days logged
 - **Backup & restore** — export your whole log as a file (plus CSV for
   spreadsheets) and restore it on any device
+- **Steps** — log your daily step count from WHOOP or any tracker
+- **Peptide tracker** — a 💉 tab with your peptide schedule (name, dose,
+  days, time of day), one-tap "taken" logging, and a due-today banner on
+  the Diary so doses aren't forgotten
 - **Food search & manual entry** — for everything without a barcode
 - **History** — swipe back through previous days
 - **Works offline** — the app itself loads with no connection (lookups need internet)

@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = '1.8';
+const APP_VERSION = '1.9';
 
 /* ---------- Nutrient definitions ----------
    off    = Open Food Facts nutriments key (per 100g, grams except kcal)
@@ -49,14 +49,18 @@ const GLASS_ML = 250, WATER_GOAL = 8;
 let db;
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('nutrilog', 2);
+    const req = indexedDB.open('nutrilog', 3);
     req.onupgradeneeded = (ev) => {
       const d = req.result;
       if (ev.oldVersion < 1) {
         d.createObjectStore('entries', { keyPath: 'id' }).createIndex('date', 'date');
       }
       if (ev.oldVersion < 2) {
-        d.createObjectStore('metrics', { keyPath: 'date' }); // {date, water, weight}
+        d.createObjectStore('metrics', { keyPath: 'date' }); // {date, water, weight, steps}
+      }
+      if (ev.oldVersion < 3) {
+        d.createObjectStore('peptides', { keyPath: 'id' });  // {id, name, dose, days[0-6], time, notes}
+        d.createObjectStore('doses', { keyPath: 'key' });    // {key: pepId|date, pepId, date, time}
       }
     };
     req.onsuccess = () => { db = req.result; resolve(); };
@@ -197,6 +201,9 @@ function renderDiary() {
   $('waterCount').textContent = water;
   $('waterMl').textContent = `${water * GLASS_ML} ml`;
 
+  // Steps
+  $('stepsCount').textContent = dayMetrics.steps ? fmt(dayMetrics.steps, 0) : '—';
+
   // Meals
   const box = $('mealSections');
   box.innerHTML = '';
@@ -229,6 +236,7 @@ async function loadDay() {
   dayMetrics = (await idbGet('metrics', currentDate)) || { date: currentDate, water: 0, weight: null };
   renderDiary();
   updateStreak();
+  updatePepBanner();
 }
 
 /* ---------- Logging streak ---------- */
@@ -899,6 +907,8 @@ async function exportBackup() {
     goals, unit: settings.unit,
     entries: await idbGetAll('entries'),
     metrics: await idbGetAll('metrics'),
+    peptides: await idbGetAll('peptides'),
+    doses: await idbGetAll('doses'),
   };
   await shareOrDownload(JSON.stringify(payload), `nutrilog-backup-${todayStr()}.json`, 'application/json');
   toast('Backup ready ✓');
@@ -920,6 +930,8 @@ async function importBackup(file) {
     if (data.app !== 'nutrilog' || !Array.isArray(data.entries)) throw new Error('not a NutriLog backup');
     for (const e of data.entries) if (e.id && e.date) await idbPut('entries', e);
     for (const m of (data.metrics || [])) if (m.date) await idbPut('metrics', m);
+    for (const p of (data.peptides || [])) if (p.id) await idbPut('peptides', p);
+    for (const ds of (data.doses || [])) if (ds.key) await idbPut('doses', ds);
     if (data.goals && !Number(goals.kcal)) {
       goals = data.goals;
       localStorage.setItem('nutrilog-goals', JSON.stringify(goals));
@@ -944,11 +956,138 @@ function dismissWelcome() {
   $('welcomeCard').classList.add('hidden');
 }
 
+/* ---------- Steps ---------- */
+async function saveSteps() {
+  const v = parseInt($('stepsInput').value, 10);
+  if (isNaN(v) || v < 0) return;
+  dayMetrics.steps = v;
+  dayMetrics.date = currentDate;
+  await idbPut('metrics', dayMetrics);
+  $('stepsInput').value = '';
+  renderDiary();
+  toast('Steps saved ✓');
+}
+
+/* ---------- Peptide tracker ---------- */
+const PEP_TIMES = { morning: '🌅 Morning', midday: '☀️ Midday', evening: '🌆 Evening', bedtime: '🌙 Bedtime' };
+const DAY_LETTERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+let editingPepId = null;
+let pepDaysSel = [0, 1, 2, 3, 4, 5, 6];
+
+const pepDoseKey = (pepId, date) => pepId + '|' + date;
+const pepDueToday = p => (p.days || []).includes(new Date().getDay());
+
+function pepScheduleText(p) {
+  const days = (p.days || []).length === 7 ? 'Every day'
+    : (p.days || []).map(d => DAY_LETTERS[d]).join(' · ') || 'No days set';
+  return `${days} · ${PEP_TIMES[p.time] || p.time}`;
+}
+
+async function pepStatusToday() {
+  const peps = await idbGetAll('peptides');
+  const today = todayStr();
+  const out = [];
+  for (const p of peps) {
+    const taken = await idbGet('doses', pepDoseKey(p.id, today));
+    out.push({ pep: p, due: pepDueToday(p), taken });
+  }
+  return out;
+}
+
+async function renderPeps() {
+  const status = await pepStatusToday();
+  const list = $('pepList');
+  list.innerHTML = '';
+  $('pepEmpty').classList.toggle('hidden', status.length > 0);
+  for (const { pep, due, taken } of status) {
+    const card = document.createElement('section');
+    card.className = 'card pep-card';
+    const btnClass = taken ? 'pep-take taken' : (due ? 'pep-take' : 'pep-take offday');
+    const btnLabel = taken ? `✓ ${taken.time}` : (due ? 'Take ✓' : 'Take anyway');
+    card.innerHTML = `<div class="pep-row">
+      <div class="pep-info" data-edit="${pep.id}">
+        <div class="pep-name">💉 ${esc(pep.name)}${due && !taken ? ' <span class="pep-due-dot">· due today</span>' : ''}</div>
+        <div class="pep-sub">${esc(pep.dose || '')}${pep.dose ? ' · ' : ''}${esc(pepScheduleText(pep))}${pep.notes ? ' · ' + esc(pep.notes) : ''}</div>
+      </div>
+      <button class="${btnClass}" data-take="${pep.id}">${btnLabel}</button>
+    </div>`;
+    list.appendChild(card);
+  }
+  for (const el of list.querySelectorAll('[data-edit]'))
+    el.onclick = () => openPepForm(status.find(s => s.pep.id === +el.dataset.edit).pep);
+  for (const el of list.querySelectorAll('[data-take]'))
+    el.onclick = () => togglePepDose(+el.dataset.take);
+}
+
+async function togglePepDose(pepId) {
+  const key = pepDoseKey(pepId, todayStr());
+  const existing = await idbGet('doses', key);
+  if (existing) {
+    await idbDelete('doses', key);
+  } else {
+    await idbPut('doses', { key, pepId, date: todayStr(),
+      time: new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) });
+    toast('Logged ✓');
+  }
+  renderPeps();
+  updatePepBanner();
+}
+
+async function updatePepBanner() {
+  const banner = $('pepDueBanner');
+  if (currentDate !== todayStr()) { banner.classList.add('hidden'); return; }
+  const pending = (await pepStatusToday()).filter(s => s.due && !s.taken);
+  banner.classList.toggle('hidden', pending.length === 0);
+  if (pending.length)
+    banner.innerHTML = `<span>💉</span><span>Due today: ${pending.map(s => esc(s.pep.name)).join(', ')} — tap to log</span>`;
+}
+
+function renderPepDays() {
+  $('pepDays').innerHTML = DAY_LETTERS.map((d, i) =>
+    `<button type="button" data-day="${i}" class="chip ${pepDaysSel.includes(i) ? 'sel' : ''}">${d[0]}</button>`).join('');
+  for (const b of document.querySelectorAll('#pepDays .chip'))
+    b.onclick = () => {
+      const d = +b.dataset.day;
+      pepDaysSel = pepDaysSel.includes(d) ? pepDaysSel.filter(x => x !== d) : [...pepDaysSel, d].sort();
+      renderPepDays();
+    };
+}
+
+function openPepForm(pep) {
+  editingPepId = pep ? pep.id : null;
+  pepDaysSel = pep ? [...(pep.days || [])] : [0, 1, 2, 3, 4, 5, 6];
+  $('pepTitle').textContent = pep ? 'Edit peptide' : 'Add peptide';
+  $('pName').value = pep?.name || '';
+  $('pDose').value = pep?.dose || '';
+  $('pTime').value = pep?.time || 'morning';
+  $('pNotes').value = pep?.notes || '';
+  $('pepDelete').classList.toggle('hidden', !pep);
+  renderPepDays();
+  $('pepModal').classList.remove('hidden');
+}
+
+async function submitPep(ev) {
+  ev.preventDefault();
+  await idbPut('peptides', {
+    id: editingPepId || Date.now(),
+    name: $('pName').value.trim(),
+    dose: $('pDose').value.trim(),
+    days: pepDaysSel,
+    time: $('pTime').value,
+    notes: $('pNotes').value.trim(),
+  });
+  $('pepModal').classList.add('hidden');
+  renderPeps();
+  updatePepBanner();
+  toast(editingPepId ? 'Updated ✓' : 'Peptide added ✓');
+}
+
 /* ---------- Tabs & navigation ---------- */
 function switchTab(id) {
   for (const p of document.querySelectorAll('.tab-page')) p.classList.toggle('hidden', p.id !== id);
   for (const b of document.querySelectorAll('.tab-btn')) b.classList.toggle('active', b.dataset.tab === id);
   if (id === 'tabTrends') renderTrends();
+  if (id === 'tabPeps') renderPeps();
 }
 function shiftDay(delta) {
   const d = new Date(currentDate + 'T12:00:00');
@@ -979,6 +1118,21 @@ async function main() {
 
   $('waterPlus').onclick = () => changeWater(1);
   $('waterMinus').onclick = () => changeWater(-1);
+  $('stepsSave').onclick = saveSteps;
+
+  $('pepAdd').onclick = () => openPepForm(null);
+  $('pepForm').addEventListener('submit', submitPep);
+  document.querySelector('[data-close-pep]').onclick = () => $('pepModal').classList.add('hidden');
+  $('pepEveryday').onclick = () => { pepDaysSel = [0, 1, 2, 3, 4, 5, 6]; renderPepDays(); };
+  $('pepDelete').onclick = async () => {
+    if (editingPepId && confirm('Delete this peptide and its history?')) {
+      await idbDelete('peptides', editingPepId);
+      $('pepModal').classList.add('hidden');
+      renderPeps();
+      updatePepBanner();
+    }
+  };
+  $('pepDueBanner').onclick = () => switchTab('tabPeps');
 
   $('addBtn').onclick = openSheet;
   document.querySelector('#addSheet [data-close]').onclick = closeSheet;

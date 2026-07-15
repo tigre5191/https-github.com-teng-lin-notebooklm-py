@@ -303,3 +303,28 @@ form input:focus { outline: 2px solid var(--accent); border-color: transparent; 
 .wizard-calc { margin-top: 12px; width: 100%; }
 .backup-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .backup-btns .btn { flex: 1; }
+
+/* Steps + peptides */
+.steps-input { display: flex; gap: 8px; align-items: center; }
+.steps-input input {
+  width: 110px; padding: 10px; font-size: 16px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--bg); color: var(--text);
+}
+.pep-due {
+  width: 100%; text-align: left; font: inherit; color: var(--text); cursor: pointer;
+  border-color: var(--ai); display: flex; align-items: center; gap: 10px;
+  font-weight: 600; font-size: 14.5px;
+}
+.pep-card { margin-bottom: 10px; }
+.pep-row { display: flex; align-items: center; gap: 12px; }
+.pep-info { flex: 1; min-width: 0; cursor: pointer; }
+.pep-name { font-weight: 700; }
+.pep-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.pep-take {
+  border: none; border-radius: 999px; padding: 10px 16px; font-size: 14px;
+  font-weight: 700; cursor: pointer; white-space: nowrap; font-family: inherit;
+  background: var(--accent); color: #fff;
+}
+.pep-take.taken { background: var(--accent-soft); color: var(--text); }
+.pep-take.offday { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.pep-due-dot { color: var(--ai); }

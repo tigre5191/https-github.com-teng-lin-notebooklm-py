@@ -69,6 +69,22 @@
       </div>
     </section>
 
+    <!-- Steps (from WHOOP or any tracker) -->
+    <section class="card water-card">
+      <div class="water-info">
+        <span class="water-ico">👟</span>
+        <div><b id="stepsCount">—</b> <span class="muted">steps today</span>
+          <div class="water-ml muted">from your WHOOP / tracker</div></div>
+      </div>
+      <div class="steps-input">
+        <input id="stepsInput" type="number" inputmode="numeric" min="0" placeholder="e.g. 8400">
+        <button id="stepsSave" class="btn btn-primary btn-sm">Set</button>
+      </div>
+    </section>
+
+    <!-- Peptides due banner -->
+    <button class="card pep-due hidden" id="pepDueBanner"></button>
+
     <!-- Meals -->
     <div id="mealSections"></div>
   </main>
@@ -100,9 +116,50 @@
   </main>
 </div>
 
+<!-- ============ PEPTIDES TAB ============ -->
+<div id="tabPeps" class="tab-page hidden">
+  <header class="topbar"><span class="date-label" style="padding:8px">Peptides</span></header>
+  <main>
+    <div id="pepList"></div>
+    <p id="pepEmpty" class="empty-msg hidden">No peptides yet.<br>Add one and it shows up here as a daily checklist.</p>
+    <button id="pepAdd" class="btn btn-primary" style="width:100%">+ Add peptide</button>
+    <p class="hint" style="margin-top:12px">💡 Web apps can't send push notifications on iPhone —
+      pair this checklist with a repeating iPhone alarm at your dose time. The Diary tab shows a
+      banner whenever something is still due today.</p>
+  </main>
+</div>
+
+<!-- Peptide editor -->
+<div id="pepModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h3 id="pepTitle">Add peptide</h3><button class="icon-btn" data-close-pep>✕</button></div>
+    <form id="pepForm">
+      <label>Name<input id="pName" required placeholder="e.g. BPC-157"></label>
+      <label>Dose <span class="opt">(as you'd say it)</span><input id="pDose" placeholder="e.g. 250 mcg"></label>
+      <label>Days</label>
+      <div class="meal-chips" id="pepDays"></div>
+      <button type="button" id="pepEveryday" class="link-btn" style="padding:6px 0">Select every day</button>
+      <label>Time of day
+        <select id="pTime">
+          <option value="morning">Morning</option>
+          <option value="midday">Midday</option>
+          <option value="evening">Evening</option>
+          <option value="bedtime">Bedtime</option>
+        </select>
+      </label>
+      <label>Notes <span class="opt">(optional)</span><input id="pNotes" placeholder="e.g. on empty stomach, 5 on / 2 off"></label>
+      <div class="form-actions">
+        <button type="button" id="pepDelete" class="btn btn-danger hidden">Delete</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Bottom navigation -->
 <nav class="tabbar">
   <button data-tab="tabDiary" class="tab-btn active"><span>📖</span>Diary</button>
+  <button data-tab="tabPeps" class="tab-btn"><span>💉</span>Peptides</button>
   <button data-tab="tabTrends" class="tab-btn"><span>📈</span>Trends</button>
 </nav>
 
