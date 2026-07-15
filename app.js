@@ -5,6 +5,8 @@
 
 'use strict';
 
+const APP_VERSION = '1.6';
+
 /* ---------- Nutrient definitions ----------
    off    = Open Food Facts nutriments key (per 100g, grams except kcal)
    factor = converts OFF grams to display unit
@@ -838,6 +840,7 @@ function shiftDay(delta) {
 
 /* ---------- Wire-up ---------- */
 async function main() {
+  $('verLabel').textContent = 'NutriLog version ' + APP_VERSION;
   await openDB();
   await loadDay();
 
