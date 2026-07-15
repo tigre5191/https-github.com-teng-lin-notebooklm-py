@@ -1,6 +1,6 @@
 /* NutriLog service worker — caches the app shell so it works offline.
    Food-database lookups (openfoodfacts.org) always go to the network. */
-const CACHE = 'nutrilog-v1';
+const CACHE = 'nutrilog-v2';
 const SHELL = [
   './',
   './index.html',

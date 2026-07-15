@@ -13,13 +13,28 @@ Barcode scans and food searches look up nutrition facts in the free, open
 
 - **Barcode scanner** — point your camera at any packaged food and its full
   nutrition facts fill in automatically
-- **Photo logging** — snap a picture of any meal so you remember what it was
-- **Food search** — find products by name when there's no barcode
-- **Manual entry** — type in anything else
-- **Automatic totals** — every nutrient is summed for the day, with a calorie
-  ring and progress bars against your personal goals
+- **AI photo analysis** — snap a picture of a meal and let Claude estimate its
+  nutrition (optional; bring your own API key, see below)
+- **Meals** — entries are grouped into Breakfast / Lunch / Dinner / Snacks with
+  per-meal calorie subtotals
+- **Nutrient targets** — every nutrient tracked against daily-value targets
+  (limits like sodium and sugar turn red when exceeded)
+- **Water tracker** — tap to log glasses of water
+- **Trends** — 14-day calorie chart with your goal line, plus a weight log
+  with a trend chart
+- **Recent foods** — one tap to re-log things you eat often
+- **Food search & manual entry** — for everything without a barcode
 - **History** — swipe back through previous days
 - **Works offline** — the app itself loads with no connection (lookups need internet)
+
+## ✨ AI photo analysis (optional)
+
+1. Create an API key at [console.anthropic.com](https://console.anthropic.com)
+2. In the app: **⚙ Settings → Claude API key**, paste it, save
+3. Add a food → take a photo → tap **✨ Analyze with AI**
+
+The key is stored only on your phone. Photos are sent to Anthropic only when
+you tap Analyze; each analysis costs a few cents.
 
 ## 📱 Install it on your iPhone
 
