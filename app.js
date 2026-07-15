@@ -383,7 +383,16 @@ function handlePhoto(file) {
   img.src = URL.createObjectURL(file);
 }
 
-/* ---------- AI photo analysis (Claude API, user's own key) ---------- */
+/* ---------- AI nutrition analysis ----------
+   Works from a photo, a typed description, or both. Accepts either a free
+   Google Gemini key (AIza…, aistudio.google.com) or a Claude API key
+   (sk-ant…, console.anthropic.com) — routed by key prefix. */
+const AI_FIELDS =
+  'name (string, short dish name), amount_g (number, estimated grams of the whole portion), ' +
+  'kcal, protein, carbs, fat, sugar, fiber, satfat (numbers; grams except kcal), ' +
+  'cholesterol, sodium, potassium, calcium, iron, vitc (numbers, in mg), ' +
+  'vita, vitd, vitb12 (numbers, in µg), confidence ("low"|"medium"|"high")';
+
 const AI_SCHEMA = {
   type: 'object',
   properties: {
@@ -396,70 +405,121 @@ const AI_SCHEMA = {
     calcium: { type: 'number', description: 'mg' }, iron: { type: 'number', description: 'mg' },
     vita: { type: 'number', description: 'Vitamin A in µg RAE' },
     vitc: { type: 'number', description: 'Vitamin C in mg' },
+    vitd: { type: 'number', description: 'Vitamin D in µg' },
+    vitb12: { type: 'number', description: 'Vitamin B12 in µg' },
     confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
   },
   required: ['name', 'amount_g', 'kcal', 'protein', 'carbs', 'fat', 'sugar', 'fiber',
              'satfat', 'cholesterol', 'sodium', 'potassium', 'calcium', 'iron',
-             'vita', 'vitc', 'confidence'],
+             'vita', 'vitc', 'vitd', 'vitb12', 'confidence'],
   additionalProperties: false,
 };
 
 function updateAiButton() {
-  $('aiBtn').classList.toggle('hidden', !formPhoto);
+  $('aiBtn').textContent = formPhoto ? '✨ Analyze photo with AI' : '✨ Estimate from name with AI';
+  $('aiBtn').classList.remove('hidden');
+}
+
+function aiPrompt(desc) {
+  let p = 'You are a nutrition expert using USDA-typical nutrient values. ';
+  if (formPhoto) {
+    p += 'Estimate the nutrition of the food in this photo, judging the portion size from ' +
+         'visual cues (plate size, utensils, packaging). ';
+    if (desc) p += `The user describes it as: "${desc}". `;
+  } else {
+    p += `Estimate the nutrition of this food: "${desc}". ` +
+         'Assume one typical serving unless the description states a quantity. ';
+  }
+  p += 'Give totals for the whole portion (not per 100 g).';
+  return p;
+}
+
+function parseAiJson(text) {
+  const m = String(text).match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('Could not read the AI answer — try again');
+  return JSON.parse(m[0]);
+}
+
+async function geminiEstimate(key, desc) {
+  const parts = [];
+  if (formPhoto)
+    parts.push({ inline_data: { mime_type: 'image/jpeg', data: formPhoto.split(',')[1] } });
+  parts.push({ text: aiPrompt(desc) +
+    ` Respond with ONLY a JSON object with exactly these keys: ${AI_FIELDS}.` });
+  const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({
+      contents: [{ parts }],
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Gemini API error ${res.status}`);
+  }
+  const data = await res.json();
+  const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+  if (!text) throw new Error('No answer returned — try again');
+  return parseAiJson(text);
+}
+
+async function claudeEstimate(key, desc) {
+  const content = [];
+  if (formPhoto)
+    content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: formPhoto.split(',')[1] } });
+  content.push({ type: 'text', text: aiPrompt(desc) });
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-opus-4-8',
+      max_tokens: 2048,
+      messages: [{ role: 'user', content }],
+      output_config: { format: { type: 'json_schema', schema: AI_SCHEMA } },
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Claude API error ${res.status}`);
+  }
+  const msg = await res.json();
+  if (msg.stop_reason === 'refusal') throw new Error('The AI declined to analyze this');
+  const text = (msg.content || []).find(b => b.type === 'text')?.text;
+  if (!text) throw new Error('No answer returned — try again');
+  return parseAiJson(text);
 }
 
 async function aiAnalyze() {
-  const key = settings.apiKey;
+  const key = (settings.apiKey || '').trim();
+  const status = $('aiStatus');
+  status.classList.remove('hidden');
   if (!key) {
-    toast('Add your Claude API key in Settings ⚙ first');
+    status.textContent = 'Add a free Gemini key (or a Claude key) in Settings ⚙ to enable AI.';
     return;
   }
-  const status = $('aiStatus');
-  status.textContent = '✨ Analyzing photo…';
-  status.classList.remove('hidden');
+  const desc = [$('fName').value.trim(), $('fBrand').value.trim()].filter(Boolean).join(' by ');
+  if (!formPhoto && !desc) {
+    status.textContent = 'Type a food name or add a photo first.';
+    return;
+  }
+  status.textContent = formPhoto ? '✨ Analyzing photo…' : '✨ Estimating from description…';
   $('aiBtn').disabled = true;
   try {
-    const data = formPhoto.split(',')[1];
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-opus-4-8',
-        max_tokens: 2048,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
-            { type: 'text', text:
-              'Estimate the nutrition of the food in this photo. Consider the entire visible ' +
-              'portion. Give your best numeric estimates for the totals of the whole portion ' +
-              '(not per 100g). Nutrient units: grams unless stated otherwise in the schema.' },
-          ],
-        }],
-        output_config: { format: { type: 'json_schema', schema: AI_SCHEMA } },
-      }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err?.error?.message || `API error ${res.status}`);
-    }
-    const msg = await res.json();
-    if (msg.stop_reason === 'refusal') throw new Error('The AI declined to analyze this image');
-    const text = (msg.content || []).find(b => b.type === 'text')?.text;
-    if (!text) throw new Error('No answer returned');
-    const est = JSON.parse(text);
-
+    const est = key.startsWith('AIza')
+      ? await geminiEstimate(key, desc)
+      : await claudeEstimate(key, desc);
     if (!$('fName').value.trim()) $('fName').value = est.name || '';
     for (const inp of document.querySelectorAll('#nutrientInputs input')) {
       const v = est[inp.dataset.nkey];
       if (typeof v === 'number' && isFinite(v)) inp.value = +v.toFixed(1);
     }
-    status.textContent = `✨ Estimated ~${fmt(est.amount_g, 0)} g portion (confidence: ${est.confidence}). Adjust anything that looks off.`;
+    status.textContent = `✨ Estimated ~${fmt(est.amount_g, 0)} g portion (confidence: ${est.confidence || 'medium'}). Adjust anything that looks off.`;
   } catch (e) {
     status.textContent = '⚠️ ' + e.message;
   } finally {

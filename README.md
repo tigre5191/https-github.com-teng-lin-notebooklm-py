@@ -13,8 +13,8 @@ Barcode scans and food searches look up nutrition facts in the free, open
 
 - **Barcode scanner** — point your camera at any packaged food and its full
   nutrition facts fill in automatically
-- **AI photo analysis** — snap a picture of a meal and let Claude estimate its
-  nutrition (optional; bring your own API key, see below)
+- **AI food analysis** — snap a photo *or just type a description* and AI
+  estimates the full nutrition (free with a Google Gemini key, see below)
 - **Meals** — entries are grouped into Breakfast / Lunch / Dinner / Snacks with
   per-meal calorie subtotals
 - **Nutrient targets** — every nutrient tracked against daily-value targets
@@ -27,14 +27,24 @@ Barcode scans and food searches look up nutrition facts in the free, open
 - **History** — swipe back through previous days
 - **Works offline** — the app itself loads with no connection (lookups need internet)
 
-## ✨ AI photo analysis (optional)
+## ✨ AI food analysis (free)
 
-1. Create an API key at [console.anthropic.com](https://console.anthropic.com)
-2. In the app: **⚙ Settings → Claude API key**, paste it, save
-3. Add a food → take a photo → tap **✨ Analyze with AI**
+The AI can estimate full nutrition from a **photo** or from just a **typed
+description** ("2 slices pepperoni pizza") — no barcode needed.
 
-The key is stored only on your phone. Photos are sent to Anthropic only when
-you tap Analyze; each analysis costs a few cents.
+**Free setup (recommended):**
+
+1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey) and
+   sign in with a Google account — no credit card needed
+2. Tap **Create API key** and copy it (starts with `AIza`)
+3. In the app: **⚙ Settings → AI key**, paste it, save
+4. Add a food → take a photo (or type a name) → tap the **✨** button
+
+Google's free tier allows hundreds of analyses per day. A paid Claude API key
+(`sk-ant-…`, console.anthropic.com) works in the same field. Either way the key
+is stored only on your phone, and photos are sent to the AI provider only when
+you tap the button. AI estimates are good but not perfect — treat them as a
+starting point and adjust what looks off.
 
 ## 📱 Install it on your iPhone
 

@@ -142,7 +142,7 @@
         <img id="photoPreview" class="photo-preview hidden" alt="">
         <div class="photo-btns">
           <button type="button" id="photoBtn" class="btn btn-light btn-sm">📷 Add photo</button>
-          <button type="button" id="aiBtn" class="btn btn-ai btn-sm hidden">✨ Analyze with AI</button>
+          <button type="button" id="aiBtn" class="btn btn-ai btn-sm">✨ Estimate with AI</button>
         </div>
         <input type="file" id="photoInput" accept="image/*" capture="environment" hidden>
       </div>
@@ -188,11 +188,13 @@
         <select id="gUnit"><option value="kg">kg</option><option value="lb">lb</option></select>
       </label>
 
-      <h4 class="form-sub">AI photo analysis <span class="opt">(optional)</span></h4>
-      <label>Claude API key<input id="gApiKey" type="password" placeholder="sk-ant-..." autocomplete="off"></label>
-      <p class="hint">Lets the ✨ button estimate nutrition from a meal photo. Get a key at
-        console.anthropic.com — each analysis costs a few cents. The key is stored only on
-        this phone, and photos are sent to Anthropic only when you tap Analyze.</p>
+      <h4 class="form-sub">AI food analysis <span class="opt">(optional)</span></h4>
+      <label>AI key — Gemini (free) or Claude<input id="gApiKey" type="password" placeholder="AIza… or sk-ant-…" autocomplete="off"></label>
+      <p class="hint"><b>Free:</b> create a Google Gemini key at <b>aistudio.google.com/apikey</b>
+        (Google account, no credit card — hundreds of analyses per day). Paid alternative:
+        a Claude key from console.anthropic.com. The ✨ button then estimates nutrition from a
+        meal photo or just a typed food name. The key stays on this phone; photos are sent to
+        the AI provider only when you tap the button.</p>
 
       <div class="form-actions"><button type="submit" class="btn btn-primary">Save settings</button></div>
     </form>
