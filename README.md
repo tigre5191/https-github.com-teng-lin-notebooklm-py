@@ -23,6 +23,11 @@ Barcode scans and food searches look up nutrition facts in the free, open
 - **Trends** — 14-day calorie chart with your goal line, plus a weight log
   with a trend chart
 - **Recent foods** — one tap to re-log things you eat often
+- **Goal wizard** — answers a few body questions and calculates your calorie
+  and macro targets (Mifflin–St Jeor)
+- **Logging streak** — a 🔥 counter for consecutive days logged
+- **Backup & restore** — export your whole log as a file (plus CSV for
+  spreadsheets) and restore it on any device
 - **Food search & manual entry** — for everything without a barcode
 - **History** — swipe back through previous days
 - **Works offline** — the app itself loads with no connection (lookups need internet)

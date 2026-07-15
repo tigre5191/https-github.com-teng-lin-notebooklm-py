@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = '1.7';
+const APP_VERSION = '1.8';
 
 /* ---------- Nutrient definitions ----------
    off    = Open Food Facts nutriments key (per 100g, grams except kcal)
@@ -158,10 +158,13 @@ function renderDiary() {
   $('dateLabel').textContent = dateLabelText(currentDate);
   const totals = totalsFor(dayEntries);
 
-  // Calories ring
+  // Calories ring + remaining
   $('kcalTotal').textContent = fmt(totals.kcal, 0);
   const goal = targetFor(NUTRIENTS[0]);
-  $('kcalGoalText').textContent = `of ${fmt(goal, 0)} kcal goal`;
+  const left = goal - totals.kcal;
+  $('kcalGoalText').textContent = left >= 0
+    ? `of ${fmt(goal, 0)} kcal · ${fmt(left, 0)} left`
+    : `of ${fmt(goal, 0)} kcal · ${fmt(-left, 0)} over`;
   const pct = Math.min(totals.kcal / goal, 1);
   $('kcalRing').style.strokeDashoffset = 264 * (1 - pct);
   $('kcalPct').textContent = Math.round((totals.kcal / goal) * 100) + '%';
@@ -225,6 +228,23 @@ async function loadDay() {
   dayEntries = await entriesForDate(currentDate);
   dayMetrics = (await idbGet('metrics', currentDate)) || { date: currentDate, water: 0, weight: null };
   renderDiary();
+  updateStreak();
+}
+
+/* ---------- Logging streak ---------- */
+async function updateStreak() {
+  let streak = 0;
+  const d = new Date();
+  // today counts if logged; otherwise the streak may still be alive from yesterday
+  if ((await entriesForDate(toDateStr(d))).length) streak++;
+  for (let i = 1; i <= 60; i++) {
+    const day = new Date(); day.setDate(day.getDate() - i);
+    if ((await entriesForDate(toDateStr(day))).length) streak++;
+    else break;
+  }
+  const chip = $('streakChip');
+  chip.classList.toggle('hidden', streak < 2);
+  if (streak >= 2) chip.textContent = `🔥 ${streak}-day logging streak`;
 }
 
 /* ---------- Toast ---------- */
@@ -836,6 +856,94 @@ function saveSettings(ev) {
   toast('Settings saved ✓');
 }
 
+/* ---------- Goal wizard (Mifflin–St Jeor) ---------- */
+function calcGoals() {
+  const age = Number($('wAge').value), hRaw = Number($('wHeight').value), wRaw = Number($('wWeight').value);
+  if (!age || !hRaw || !wRaw) { $('wResult').textContent = 'Fill in age, height, and weight first.'; return; }
+  const kg = (settings.unit === 'lb') ? wRaw * 0.4536 : wRaw;
+  const cm = $('wHUnit').value === 'in' ? hRaw * 2.54 : hRaw;
+  const bmr = 10 * kg + 6.25 * cm - 5 * age + ($('wSex').value === 'm' ? 5 : -161);
+  const tdee = bmr * Number($('wActivity').value);
+  const kcal = Math.max(1200, Math.round((tdee + Number($('wObjective').value)) / 10) * 10);
+  const protein = Math.round(kg * 1.6);          // 1.6 g/kg — solid general target
+  const fat = Math.round(kcal * 0.30 / 9);       // 30% of calories
+  const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
+  $('gKcal').value = kcal; $('gProtein').value = protein; $('gCarbs').value = carbs; $('gFat').value = fat;
+  $('wResult').textContent =
+    `Suggested: ${fmt(kcal, 0)} kcal, ${protein} g protein, ${carbs} g carbs, ${fat} g fat — filled in above. Tap “Save settings” to apply.`;
+}
+
+/* ---------- Backup: export / restore / CSV ---------- */
+function idbGetAll(store) {
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(store).objectStore(store).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function shareOrDownload(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const file = new File([blob], filename, { type: mime });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+async function exportBackup() {
+  const payload = {
+    app: 'nutrilog', format: 1, exported: new Date().toISOString(),
+    goals, unit: settings.unit,
+    entries: await idbGetAll('entries'),
+    metrics: await idbGetAll('metrics'),
+  };
+  await shareOrDownload(JSON.stringify(payload), `nutrilog-backup-${todayStr()}.json`, 'application/json');
+  toast('Backup ready ✓');
+}
+async function exportCsv() {
+  const cols = ['date', 'time', 'meal', 'name', 'brand', 'amount'];
+  const nutrCols = NUTRIENTS.map(n => n.key);
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const entries = (await idbGetAll('entries')).sort((a, b) => a.date === b.date ? a.id - b.id : (a.date < b.date ? -1 : 1));
+  const lines = [[...cols, ...nutrCols.map(k => NUTRIENTS.find(n => n.key === k).label)].map(q).join(',')];
+  for (const e of entries)
+    lines.push([...cols.map(c => e[c]), ...nutrCols.map(k => e.nutrients?.[k] ?? '')].map(q).join(','));
+  await shareOrDownload(lines.join('\n'), `nutrilog-log-${todayStr()}.csv`, 'text/csv');
+  toast('CSV ready ✓');
+}
+async function importBackup(file) {
+  try {
+    const data = JSON.parse(await file.text());
+    if (data.app !== 'nutrilog' || !Array.isArray(data.entries)) throw new Error('not a NutriLog backup');
+    for (const e of data.entries) if (e.id && e.date) await idbPut('entries', e);
+    for (const m of (data.metrics || [])) if (m.date) await idbPut('metrics', m);
+    if (data.goals && !Number(goals.kcal)) {
+      goals = data.goals;
+      localStorage.setItem('nutrilog-goals', JSON.stringify(goals));
+    }
+    $('settingsModal').classList.add('hidden');
+    await loadDay();
+    toast(`Restored ${data.entries.length} entries ✓`);
+  } catch (e) {
+    toast('⚠️ Couldn’t read that backup: ' + e.message);
+  }
+}
+
+/* ---------- First-run welcome ---------- */
+async function maybeShowWelcome() {
+  if (localStorage.getItem('nutrilog-welcomed')) return;
+  const any = (await idbGetAll('entries')).length > 0;
+  if (any) { localStorage.setItem('nutrilog-welcomed', '1'); return; }
+  $('welcomeCard').classList.remove('hidden');
+}
+function dismissWelcome() {
+  localStorage.setItem('nutrilog-welcomed', '1');
+  $('welcomeCard').classList.add('hidden');
+}
+
 /* ---------- Tabs & navigation ---------- */
 function switchTab(id) {
   for (const p of document.querySelectorAll('.tab-page')) p.classList.toggle('hidden', p.id !== id);
@@ -914,6 +1022,23 @@ async function main() {
   document.querySelector('[data-close-settings]').onclick = () => $('settingsModal').classList.add('hidden');
   $('settingsForm').addEventListener('submit', saveSettings);
   $('weightSave').onclick = saveWeight;
+
+  $('wCalc').onclick = calcGoals;
+  $('exportBtn').onclick = exportBackup;
+  $('exportCsvBtn').onclick = exportCsv;
+  $('importBtn').onclick = () => $('importInput').click();
+  $('importInput').addEventListener('change', e => {
+    if (e.target.files[0]) importBackup(e.target.files[0]);
+    e.target.value = '';
+  });
+
+  $('welcomeDismiss').onclick = dismissWelcome;
+  $('welcomeGoals').onclick = () => {
+    dismissWelcome();
+    openSettings();
+    $('wizard').open = true;
+  };
+  maybeShowWelcome();
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});

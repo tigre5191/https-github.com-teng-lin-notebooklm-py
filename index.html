@@ -26,6 +26,18 @@
   </header>
 
   <main>
+    <!-- First-run welcome -->
+    <section class="card welcome-card hidden" id="welcomeCard">
+      <h3>Welcome to NutriLog 👋</h3>
+      <p class="hint">Four ways to log food with the <b>+</b> button: 🏷️ scan a barcode,
+        📷 snap a photo, ✨ type a name and let AI estimate, or ✏️ enter it yourself.
+        Start by setting your daily goals — I can calculate them for you.</p>
+      <div class="form-actions">
+        <button id="welcomeGoals" class="btn btn-primary btn-sm">Set my goals</button>
+        <button id="welcomeDismiss" class="btn btn-light btn-sm">Got it</button>
+      </div>
+    </section>
+
     <!-- Daily totals -->
     <section class="card totals-card">
       <div class="kcal-row">
@@ -38,6 +50,7 @@
           <circle cx="50" cy="50" r="42" class="ring-fg" id="kcalRing"/>
         </svg><div class="ring-pct" id="kcalPct"></div></div>
       </div>
+      <div id="streakChip" class="streak hidden"></div>
       <div class="macro-grid" id="macroGrid"></div>
       <button id="toggleNutrients" class="link-btn">Show nutrient targets ▾</button>
       <div id="nutrientTable" class="target-list hidden"></div>
@@ -177,6 +190,27 @@
     <div class="modal-head"><h3>Settings</h3><button class="icon-btn" data-close-settings>✕</button></div>
     <form id="settingsForm">
       <h4 class="form-sub" style="margin-top:4px">Daily goals</h4>
+      <details id="wizard" class="wizard">
+        <summary>🎯 Calculate my goals for me</summary>
+        <div class="nutrient-inputs">
+          <label>Sex<select id="wSex"><option value="m">Male</option><option value="f">Female</option></select></label>
+          <label>Age<input id="wAge" type="number" inputmode="numeric" min="10" max="100" placeholder="35"></label>
+          <label>Height<input id="wHeight" type="number" inputmode="decimal" min="0" placeholder="170"></label>
+          <label>Height unit<select id="wHUnit"><option value="cm">cm</option><option value="in">inches</option></select></label>
+          <label>Weight<input id="wWeight" type="number" inputmode="decimal" min="0" placeholder="75"></label>
+          <label>Activity<select id="wActivity">
+            <option value="1.2">Mostly sitting</option>
+            <option value="1.375" selected>Lightly active</option>
+            <option value="1.55">Active</option>
+            <option value="1.725">Very active</option></select></label>
+          <label>Objective<select id="wObjective">
+            <option value="-500">Lose weight</option>
+            <option value="0" selected>Maintain</option>
+            <option value="300">Gain muscle</option></select></label>
+        </div>
+        <button type="button" id="wCalc" class="btn btn-light btn-sm wizard-calc">Calculate &amp; fill in goals</button>
+        <p class="hint" id="wResult"></p>
+      </details>
       <div class="nutrient-inputs">
         <label>Calories (kcal)<input id="gKcal" type="number" inputmode="numeric" min="0" placeholder="2000"></label>
         <label>Protein (g)<input id="gProtein" type="number" inputmode="numeric" min="0" placeholder="50"></label>
@@ -197,6 +231,16 @@
         key from console.anthropic.com. The ✨ button then estimates nutrition from a meal photo
         or a typed food name. The key stays on this phone; photos are sent to the AI provider
         only when you tap the button.</p>
+
+      <h4 class="form-sub">Backup</h4>
+      <div class="backup-btns">
+        <button type="button" id="exportBtn" class="btn btn-light btn-sm">⬇️ Backup</button>
+        <button type="button" id="importBtn" class="btn btn-light btn-sm">⬆️ Restore</button>
+        <button type="button" id="exportCsvBtn" class="btn btn-light btn-sm">📄 CSV</button>
+        <input type="file" id="importInput" accept=".json,application/json" hidden>
+      </div>
+      <p class="hint">Backups include your food log, water, weight, and goals (not your AI key).
+        Your data lives only on this phone — keep a backup somewhere safe.</p>
 
       <div class="form-actions"><button type="submit" class="btn btn-primary">Save settings</button></div>
     </form>
