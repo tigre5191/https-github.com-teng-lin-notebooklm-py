@@ -36,7 +36,7 @@ description** ("2 slices pepperoni pizza") — no barcode needed.
 
 1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey) and
    sign in with a Google account — no credit card needed
-2. Tap **Create API key** and copy it (starts with `AIza`)
+2. Tap **Create API key** and copy it (starts with `AIza` or `AQ.`)
 3. In the app: **⚙ Settings → AI key**, paste it, save
 4. Add a food → take a photo (or type a name) → tap the **✨** button
 

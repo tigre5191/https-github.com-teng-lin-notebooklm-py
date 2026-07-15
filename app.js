@@ -444,7 +444,7 @@ const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-fl
 
 function friendlyGeminiError(status, msg) {
   if (/API key not valid|API_KEY_INVALID|API key expired/i.test(msg))
-    return 'Gemini rejected the key. Re-copy the whole key (starts with AIza) from aistudio.google.com/apikey and paste it again in Settings.';
+    return 'Gemini rejected the key. Re-copy the whole key (starts with AIza or AQ.) from aistudio.google.com/apikey and paste it again in Settings.';
   if (status === 429) return 'Free daily AI limit reached — try again in a while.';
   if (status === 403) return 'This key isn’t allowed here — create a plain key at aistudio.google.com/apikey without website restrictions.';
   return 'Gemini: ' + msg;
@@ -527,10 +527,11 @@ async function aiAnalyze() {
   status.textContent = formPhoto ? '✨ Analyzing photo…' : '✨ Estimating from description…';
   $('aiBtn').disabled = true;
   try {
-    let est;
-    if (key.startsWith('AIza')) est = await geminiEstimate(key, desc);
-    else if (key.startsWith('sk-ant')) est = await claudeEstimate(key, desc);
-    else throw new Error('That key doesn’t look like a Gemini key (starts with AIza) or a Claude key (starts with sk-ant) — double-check it in Settings ⚙.');
+    // Claude keys start with sk-ant; Google keys are AIza… (classic) or AQ.… (new
+    // format) — treat everything non-Claude as a Gemini key.
+    const est = key.startsWith('sk-ant')
+      ? await claudeEstimate(key, desc)
+      : await geminiEstimate(key, desc);
     if (!$('fName').value.trim()) $('fName').value = est.name || '';
     for (const inp of document.querySelectorAll('#nutrientInputs input')) {
       const v = est[inp.dataset.nkey];
