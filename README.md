@@ -22,7 +22,8 @@ Barcode scans and food searches look up nutrition facts in the free, open
 - **Water tracker** — tap to log glasses of water
 - **Trends** — 14-day calorie chart with your goal line, plus a weight log
   with a trend chart
-- **Recent foods** — one tap to re-log things you eat often
+- **My Foods library** — every food and drink you've ever logged is
+  remembered and searchable in the + menu; one tap re-logs it
 - **Goal wizard** — answers a few body questions and calculates your calorie
   and macro targets (Mifflin–St Jeor)
 - **Logging streak** — a 🔥 counter for consecutive days logged

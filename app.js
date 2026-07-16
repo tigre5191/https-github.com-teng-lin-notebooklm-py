@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = '2.2';
+const APP_VERSION = '2.3';
 
 /* ---------- Nutrient definitions ----------
    off    = Open Food Facts nutriments key (per 100g, grams except kcal)
@@ -49,7 +49,7 @@ const GLASS_ML = 250, WATER_GOAL = 8;
 let db;
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('nutrilog', 3);
+    const req = indexedDB.open('nutrilog', 4);
     req.onupgradeneeded = (ev) => {
       const d = req.result;
       if (ev.oldVersion < 1) {
@@ -61,6 +61,9 @@ function openDB() {
       if (ev.oldVersion < 3) {
         d.createObjectStore('peptides', { keyPath: 'id' });  // {id, name, dose, days[0-6], time, notes}
         d.createObjectStore('doses', { keyPath: 'key' });    // {key: pepId|date, pepId, date, time}
+      }
+      if (ev.oldVersion < 4) {
+        d.createObjectStore('foods', { keyPath: 'key' });    // library of every food ever logged
       }
     };
     req.onsuccess = () => { db = req.result; resolve(); };
@@ -117,7 +120,6 @@ let showAllForm = false;
 let showTargets = false;
 let goals = JSON.parse(localStorage.getItem('nutrilog-goals') || '{}');
 let settings = JSON.parse(localStorage.getItem('nutrilog-settings') || '{"unit":"kg"}');
-let recents = JSON.parse(localStorage.getItem('nutrilog-recents') || '[]');
 
 function targetFor(n) {
   if (n.goalKey && Number(goals[n.goalKey])) return Number(goals[n.goalKey]);
@@ -350,14 +352,35 @@ function applyAmount() {
 }
 function closeEntryForm() { $('entryModal').classList.add('hidden'); }
 
-function rememberRecent(entry) {
-  const keyOf = e => (e.name + '|' + (e.brand || '')).toLowerCase();
-  recents = [
-    { name: entry.name, brand: entry.brand, per100: entry.per100, servingQty: entry.servingQty,
-      amount: entry.amount, nutrients: entry.nutrients, barcode: entry.barcode },
-    ...recents.filter(r => keyOf(r) !== keyOf(entry)),
-  ].slice(0, 10);
-  localStorage.setItem('nutrilog-recents', JSON.stringify(recents));
+/* ---------- My Foods library: every food/drink ever logged ---------- */
+const foodKey = e => ((e.name || '') + '|' + (e.brand || '')).toLowerCase().trim();
+
+async function rememberFood(entry, ts) {
+  if (!entry.name) return;
+  const key = foodKey(entry);
+  const prev = await idbGet('foods', key);
+  await idbPut('foods', {
+    key,
+    name: entry.name,
+    brand: entry.brand || '',
+    per100: entry.per100 || prev?.per100 || null,
+    servingQty: entry.servingQty || prev?.servingQty || null,
+    amount: entry.amount || prev?.amount || null,
+    nutrients: entry.nutrients || prev?.nutrients || {},
+    barcode: entry.barcode || prev?.barcode || null,
+    uses: (prev?.uses || 0) + 1,
+    lastUsed: ts ?? Date.now(),
+  });
+}
+
+/* One-time: seed the library from everything already logged */
+async function backfillFoods() {
+  if (localStorage.getItem('nutrilog-foods-v1')) return;
+  const entries = (await idbGetAll('entries')).sort((a, b) => a.id - b.id);
+  for (const e of entries) await rememberFood(e, e.id);
+  for (const r of JSON.parse(localStorage.getItem('nutrilog-recents') || '[]'))
+    await rememberFood(r);
+  localStorage.setItem('nutrilog-foods-v1', '1');
 }
 
 async function submitEntry(ev) {
@@ -385,7 +408,7 @@ async function submitEntry(ev) {
   };
   const wasEdit = !!editingId;
   await idbPut('entries', entry);
-  rememberRecent(entry);
+  await rememberFood(entry);
   closeEntryForm();
   await loadDay();
   toast(wasEdit ? 'Updated ✓' : 'Added to your log ✓');
@@ -773,22 +796,40 @@ async function runSearch() {
   }
 }
 
-/* ---------- Add sheet + recents ---------- */
-function openSheet() {
-  const block = $('recentsBlock');
+/* ---------- Add sheet + My Foods library ---------- */
+async function renderMyFoods() {
+  const q = $('foodSearch').value.trim().toLowerCase();
+  const all = await idbGetAll('foods');
+  $('myFoodsBlock').classList.toggle('hidden', all.length === 0);
+  const shown = q
+    ? all.filter(f => (f.name + ' ' + f.brand).toLowerCase().includes(q))
+        .sort((a, b) => (b.uses || 0) - (a.uses || 0)).slice(0, 25)
+    : all.sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0)).slice(0, 8);
   const list = $('recentsList');
   list.innerHTML = '';
-  block.classList.toggle('hidden', recents.length === 0);
-  for (const r of recents.slice(0, 6)) {
-    const b = document.createElement('button');
-    b.className = 'entry';
-    b.innerHTML = `<span class="thumb">🕘</span><span class="e-main">
-      <span class="e-name">${esc(r.name)}</span>
-      <span class="e-sub">${esc(r.brand || '')}</span></span>
-      <span class="e-kcal">${fmt(r.nutrients?.kcal || 0, 0)}<small> kcal</small></span>`;
-    b.onclick = () => { closeSheet(); openEntryForm(null, r); };
-    list.appendChild(b);
+  const msg = $('foodSearchMsg');
+  msg.classList.toggle('hidden', !(q && shown.length === 0));
+  if (q && shown.length === 0) msg.textContent = `Nothing logged matching “${q}” yet.`;
+  for (const f of shown) {
+    const row = document.createElement('div');
+    row.className = 'entry';
+    row.innerHTML = `<span class="thumb">${q ? '🍽️' : '🕘'}</span><span class="e-main">
+      <span class="e-name">${esc(f.name)}</span>
+      <span class="e-sub">${esc(f.brand || '')}${f.brand && f.uses > 1 ? ' · ' : ''}${f.uses > 1 ? 'logged ' + f.uses + '×' : ''}</span></span>
+      <span class="e-kcal">${fmt(f.nutrients?.kcal || 0, 0)}<small> kcal</small></span>
+      <button class="food-x" aria-label="Remove from my foods">✕</button>`;
+    row.onclick = () => { closeSheet(); openEntryForm(null, f); };
+    row.querySelector('.food-x').onclick = async (ev) => {
+      ev.stopPropagation();
+      await idbDelete('foods', f.key);
+      renderMyFoods();
+    };
+    list.appendChild(row);
   }
+}
+function openSheet() {
+  $('foodSearch').value = '';
+  renderMyFoods();
   $('addSheet').classList.remove('hidden');
 }
 function closeSheet() { $('addSheet').classList.add('hidden'); }
@@ -995,6 +1036,7 @@ async function exportBackup() {
     metrics: await idbGetAll('metrics'),
     peptides: await idbGetAll('peptides'),
     doses: await idbGetAll('doses'),
+    foods: await idbGetAll('foods'),
   };
   await shareOrDownload(JSON.stringify(payload), `nutrilog-backup-${todayStr()}.json`, 'application/json');
   toast('Backup ready ✓');
@@ -1018,6 +1060,7 @@ async function importBackup(file) {
     for (const m of (data.metrics || [])) if (m.date) await idbPut('metrics', m);
     for (const p of (data.peptides || [])) if (p.id) await idbPut('peptides', p);
     for (const ds of (data.doses || [])) if (ds.key) await idbPut('doses', ds);
+    for (const f of (data.foods || [])) if (f.key) await idbPut('foods', f);
     if (data.goals && !Number(goals.kcal)) {
       goals = data.goals;
       localStorage.setItem('nutrilog-goals', JSON.stringify(goals));
@@ -1186,6 +1229,7 @@ function shiftDay(delta) {
 async function main() {
   $('verLabel').textContent = 'NutriLog version ' + APP_VERSION;
   await openDB();
+  await backfillFoods();
   await loadDay();
 
   $('prevDay').onclick = () => shiftDay(-1);
@@ -1222,6 +1266,7 @@ async function main() {
 
   $('addBtn').onclick = openSheet;
   document.querySelector('#addSheet [data-close]').onclick = closeSheet;
+  $('foodSearch').addEventListener('input', renderMyFoods);
   $('optScan').onclick = startScan;
   $('optPhoto').onclick = () => { closeSheet(); openEntryForm(null, {}); setTimeout(pickGallery, 150); };
   $('optSearch').onclick = () => {

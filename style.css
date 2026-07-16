@@ -331,3 +331,14 @@ form input:focus { outline: 2px solid var(--accent); border-color: transparent; 
 
 .photo-src-row { display: flex; gap: 8px; }
 .photo-src-row .btn { flex: 1; white-space: nowrap; }
+
+/* My foods library */
+#foodSearch {
+  width: 100%; padding: 11px 12px; font-size: 16px; margin-bottom: 10px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--bg); color: var(--text);
+}
+.food-x {
+  background: none; border: none; color: var(--muted); font-size: 17px;
+  padding: 6px 8px; cursor: pointer; flex-shrink: 0;
+}
