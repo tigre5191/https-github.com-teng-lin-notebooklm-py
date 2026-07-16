@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = '2.1';
+const APP_VERSION = '2.2';
 
 /* ---------- Nutrient definitions ----------
    off    = Open Food Facts nutriments key (per 100g, grams except kcal)
@@ -501,8 +501,37 @@ function parseAiJson(raw) {
 }
 
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-2.0-flash'];
+const AI_TIMEOUT_MS = 20000;   // per request
+const AI_DEADLINE_MS = 60000;  // whole analysis
+
+function fetchT(url, opts, ms) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctl.signal }).finally(() => clearTimeout(t));
+}
+
+/* The AI doesn't need full resolution — a small JPEG uploads much faster on
+   weak signal. The stored photo keeps its original quality. */
+function shrinkForAi(dataUrl, max = 768, q = 0.72) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.width, img.height));
+      if (s >= 1) return resolve(dataUrl);
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * s);
+      c.height = Math.round(img.height * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/jpeg', q));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
 
 function friendlyGeminiError(status, msg) {
+  if (msg === 'network')
+    return 'Slow or no connection — the AI couldn’t be reached. Check your signal and tap ✨ again.';
   if (/^garbled:/.test(msg))
     return 'The AI answer came back garbled — tap ✨ to try again. (' + msg.slice(8) + '…)';
   if (/API key not valid|API_KEY_INVALID|API key expired/i.test(msg))
@@ -519,20 +548,31 @@ function friendlyGeminiError(status, msg) {
 async function geminiEstimate(key, desc) {
   const parts = [];
   if (formPhoto)
-    parts.push({ inline_data: { mime_type: 'image/jpeg', data: formPhoto.split(',')[1] } });
+    parts.push({ inline_data: { mime_type: 'image/jpeg', data: (await shrinkForAi(formPhoto)).split(',')[1] } });
   parts.push({ text: aiPrompt(desc) +
     ` Respond with ONLY a JSON object with exactly these keys: ${AI_FIELDS}.` });
   let lastStatus = 503, lastMsg = 'high demand';
+  const started = Date.now();
+  let tryNo = 0;
   for (let attempt = 0; attempt < 2; attempt++) {
     for (const model of GEMINI_MODELS) {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
-        }),
-      });
+      if (Date.now() - started > AI_DEADLINE_MS) throw new Error(friendlyGeminiError(lastStatus, lastMsg));
+      if (++tryNo > 1) $('aiStatus').textContent = `✨ Still working — backup attempt ${tryNo}…`;
+      let res;
+      try {
+        res = await fetchT(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
+          }),
+        }, AI_TIMEOUT_MS);
+      } catch {
+        // timed out or dropped connection — transient, try the next model
+        lastStatus = 0; lastMsg = 'network';
+        continue;
+      }
       if (res.ok) {
         const data = await res.json();
         // skip "thought" parts some models emit; keep answer text only
@@ -564,9 +604,9 @@ async function geminiEstimate(key, desc) {
 async function claudeEstimate(key, desc) {
   const content = [];
   if (formPhoto)
-    content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: formPhoto.split(',')[1] } });
+    content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: (await shrinkForAi(formPhoto)).split(',')[1] } });
   content.push({ type: 'text', text: aiPrompt(desc) });
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetchT('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -580,6 +620,8 @@ async function claudeEstimate(key, desc) {
       messages: [{ role: 'user', content }],
       output_config: { format: { type: 'json_schema', schema: AI_SCHEMA } },
     }),
+  }, AI_DEADLINE_MS).catch(() => {
+    throw new Error('Slow or no connection — the AI couldn’t be reached. Check your signal and try again.');
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -603,6 +645,10 @@ async function aiAnalyze() {
   const desc = [$('fName').value.trim(), $('fBrand').value.trim()].filter(Boolean).join(' by ');
   if (!formPhoto && !desc) {
     status.textContent = 'Type a food name or add a photo first.';
+    return;
+  }
+  if (navigator.onLine === false) {
+    status.textContent = '⚠️ No internet connection — the AI needs to be online.';
     return;
   }
   status.textContent = formPhoto ? '✨ Analyzing photo…' : '✨ Estimating from description…';
