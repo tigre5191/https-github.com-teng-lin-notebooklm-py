@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = '1.9';
+const APP_VERSION = '2.0';
 
 /* ---------- Nutrient definitions ----------
    off    = Open Food Facts nutriments key (per 100g, grams except kcal)
@@ -464,15 +464,44 @@ function aiPrompt(desc) {
   return p;
 }
 
-function parseAiJson(text) {
-  const m = String(text).match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('Could not read the AI answer — try again');
-  return JSON.parse(m[0]);
+/* Tolerant JSON extraction: handles markdown fences, prose around the object,
+   trailing commas, and truncated output (closes open strings/braces). */
+function parseAiJson(raw) {
+  let t = String(raw).trim()
+    .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  const start = t.indexOf('{');
+  if (start < 0) throw new Error('no JSON in answer');
+  t = t.slice(start);
+  let depth = 0, end = -1, inStr = false, esc = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === '{') depth++;
+    else if (ch === '}') { depth--; if (depth === 0) { end = i; break; } }
+  }
+  let candidate = end >= 0 ? t.slice(0, end + 1) : t;
+  try { return JSON.parse(candidate); } catch {}
+  let fixed = candidate;
+  if (end < 0) { // truncated mid-object: close what's open
+    if (inStr) fixed += '"';
+    fixed = fixed.replace(/[,:]\s*$/, '');
+    fixed += '}'.repeat(Math.max(1, depth));
+  }
+  fixed = fixed.replace(/,\s*([}\]])/g, '$1');
+  return JSON.parse(fixed); // throws to caller if still unreadable
 }
 
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-2.0-flash'];
 
 function friendlyGeminiError(status, msg) {
+  if (/^garbled:/.test(msg))
+    return 'The AI answer came back garbled — tap ✨ to try again. (' + msg.slice(8) + '…)';
   if (/API key not valid|API_KEY_INVALID|API key expired/i.test(msg))
     return 'Gemini rejected the key. Re-copy the whole key (starts with AIza or AQ.) from aistudio.google.com/apikey and paste it again in Settings.';
   if (status === 503 || /high demand|overloaded/i.test(msg))
@@ -503,9 +532,17 @@ async function geminiEstimate(key, desc) {
       });
       if (res.ok) {
         const data = await res.json();
-        const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
-        if (!text) throw new Error('No answer returned — try again');
-        return parseAiJson(text);
+        // skip "thought" parts some models emit; keep answer text only
+        const text = (data.candidates?.[0]?.content?.parts || [])
+          .filter(p => !p.thought).map(p => p.text || '').join('');
+        try {
+          if (!text) throw new Error('empty');
+          return parseAiJson(text);
+        } catch {
+          // garbled/empty answer — treat as transient and try the next model
+          lastStatus = 0; lastMsg = 'garbled:' + text.slice(0, 60);
+          continue;
+        }
       }
       const err = await res.json().catch(() => ({}));
       const msg = err?.error?.message || `error ${res.status}`;
