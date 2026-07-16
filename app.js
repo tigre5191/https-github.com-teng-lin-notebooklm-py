@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = '2.3';
+const APP_VERSION = '2.4';
 
 /* ---------- Nutrient definitions ----------
    off    = Open Food Facts nutriments key (per 100g, grams except kcal)
@@ -561,7 +561,11 @@ function friendlyGeminiError(status, msg) {
     return 'Gemini rejected the key. Re-copy the whole key (starts with AIza or AQ.) from aistudio.google.com/apikey and paste it again in Settings.';
   if (status === 503 || /high demand|overloaded/i.test(msg))
     return 'Google’s free AI is busy right now — wait a few seconds and tap ✨ again.';
-  if (status === 429) return 'Free AI limit reached for today — try again later.';
+  if (status === 429) {
+    if (/PerDay|per day|daily/i.test(msg))
+      return 'Today’s free AI allowance is used up — it resets at midnight Pacific time. Barcodes, search, and manual entry still work.';
+    return 'Google is rate-limiting short bursts — wait about a minute, then tap ✨ again.';
+  }
   if (status === 403) return 'This key isn’t allowed here — create a plain key at aistudio.google.com/apikey without website restrictions.';
   return 'Gemini: ' + msg;
 }
@@ -576,7 +580,7 @@ async function geminiEstimate(key, desc) {
     ` Respond with ONLY a JSON object with exactly these keys: ${AI_FIELDS}.` });
   let lastStatus = 503, lastMsg = 'high demand';
   const started = Date.now();
-  let tryNo = 0;
+  let tryNo = 0, retryHintSec = 0;
   for (let attempt = 0; attempt < 2; attempt++) {
     for (const model of GEMINI_MODELS) {
       if (Date.now() - started > AI_DEADLINE_MS) throw new Error(friendlyGeminiError(lastStatus, lastMsg));
@@ -611,14 +615,23 @@ async function geminiEstimate(key, desc) {
         }
       }
       const err = await res.json().catch(() => ({}));
-      const msg = err?.error?.message || `error ${res.status}`;
+      const details = JSON.stringify(err?.error?.details || []);
+      const msg = (err?.error?.message || `error ${res.status}`) +
+                  (res.status === 429 ? ' ' + details : '');
       const transient = [404, 429, 503].includes(res.status) || /high demand|overloaded/i.test(msg);
       if (!transient) throw new Error(friendlyGeminiError(res.status, msg));
       lastStatus = res.status; lastMsg = msg;
+      const rd = details.match(/"retryDelay"\s*:\s*"(\d+)/);
+      if (rd) retryHintSec = Math.min(+rd[1], 25);
     }
     if (attempt === 0) {
-      $('aiStatus').textContent = '✨ Google is busy — retrying…';
-      await new Promise(r => setTimeout(r, 2500));
+      if (/PerDay|per day|daily/i.test(lastMsg)) break; // daily quota — waiting won't help
+      const waitMs = retryHintSec ? retryHintSec * 1000 : 2500;
+      if (Date.now() - started + waitMs > AI_DEADLINE_MS) break;
+      $('aiStatus').textContent = retryHintSec
+        ? `✨ Google asked for a ${retryHintSec}s pause — waiting, then retrying…`
+        : '✨ Google is busy — retrying…';
+      await new Promise(r => setTimeout(r, waitMs));
     }
   }
   throw new Error(friendlyGeminiError(lastStatus, lastMsg));
