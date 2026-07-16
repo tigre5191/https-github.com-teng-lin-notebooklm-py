@@ -211,10 +211,14 @@
       <div class="photo-row">
         <img id="photoPreview" class="photo-preview hidden" alt="">
         <div class="photo-btns">
-          <button type="button" id="photoBtn" class="btn btn-light btn-sm">📷 Add photo</button>
+          <div class="photo-src-row">
+            <button type="button" id="photoBtn" class="btn btn-light btn-sm">📷 Camera</button>
+            <button type="button" id="galleryBtn" class="btn btn-light btn-sm">🖼️ Gallery</button>
+          </div>
           <button type="button" id="aiBtn" class="btn btn-ai btn-sm">✨ Estimate with AI</button>
         </div>
         <input type="file" id="photoInput" accept="image/*" capture="environment" hidden>
+        <input type="file" id="galleryInput" accept="image/*" hidden>
       </div>
       <p id="aiStatus" class="hint hidden"></p>
 

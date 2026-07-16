@@ -328,3 +328,6 @@ form input:focus { outline: 2px solid var(--accent); border-color: transparent; 
 .pep-take.taken { background: var(--accent-soft); color: var(--text); }
 .pep-take.offday { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
 .pep-due-dot { color: var(--ai); }
+
+.photo-src-row { display: flex; gap: 8px; }
+.photo-src-row .btn { flex: 1; white-space: nowrap; }

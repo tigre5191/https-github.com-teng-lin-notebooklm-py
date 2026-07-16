@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = '2.0';
+const APP_VERSION = '2.1';
 
 /* ---------- Nutrient definitions ----------
    off    = Open Food Facts nutriments key (per 100g, grams except kcal)
@@ -300,7 +300,6 @@ function openEntryForm(entry, prefill) {
   const pv = $('photoPreview');
   if (formPhoto) { pv.src = formPhoto; pv.classList.remove('hidden'); }
   else pv.classList.add('hidden');
-  $('photoBtn').textContent = formPhoto ? '📷 Change photo' : '📷 Add photo';
   updateAiButton();
 
   const hasProduct = !!formPer100;
@@ -394,8 +393,13 @@ async function submitEntry(ev) {
 
 /* ---------- Photos ---------- */
 function pickPhoto() { $('photoInput').click(); }
+function pickGallery() { $('galleryInput').click(); }
 function handlePhoto(file) {
   const img = new Image();
+  img.onerror = () => {
+    URL.revokeObjectURL(img.src);
+    toast('⚠️ Couldn’t read that image — try another one');
+  };
   img.onload = () => {
     const max = 1100;
     const scale = Math.min(1, max / Math.max(img.width, img.height));
@@ -407,7 +411,6 @@ function handlePhoto(file) {
     URL.revokeObjectURL(img.src);
     const pv = $('photoPreview');
     pv.src = formPhoto; pv.classList.remove('hidden');
-    $('photoBtn').textContent = '📷 Change photo';
     updateAiButton();
   };
   img.src = URL.createObjectURL(file);
@@ -1174,7 +1177,7 @@ async function main() {
   $('addBtn').onclick = openSheet;
   document.querySelector('#addSheet [data-close]').onclick = closeSheet;
   $('optScan').onclick = startScan;
-  $('optPhoto').onclick = () => { closeSheet(); openEntryForm(null, {}); setTimeout(pickPhoto, 150); };
+  $('optPhoto').onclick = () => { closeSheet(); openEntryForm(null, {}); setTimeout(pickGallery, 150); };
   $('optSearch').onclick = () => {
     closeSheet();
     $('searchResults').innerHTML = ''; $('searchInput').value = '';
@@ -1192,8 +1195,10 @@ async function main() {
   document.querySelector('[data-close-entry]').onclick = closeEntryForm;
   $('entryForm').addEventListener('submit', submitEntry);
   $('photoBtn').onclick = pickPhoto;
+  $('galleryBtn').onclick = pickGallery;
   $('aiBtn').onclick = aiAnalyze;
-  $('photoInput').addEventListener('change', e => { if (e.target.files[0]) handlePhoto(e.target.files[0]); e.target.value = ''; });
+  for (const id of ['photoInput', 'galleryInput'])
+    $(id).addEventListener('change', e => { if (e.target.files[0]) handlePhoto(e.target.files[0]); e.target.value = ''; });
   $('fAmount').addEventListener('input', applyAmount);
   $('moreNutrients').onclick = () => {
     showAllForm = !showAllForm;
