@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = '2.4';
+const APP_VERSION = '2.5';
 
 /* ---------- Nutrient definitions ----------
    off    = Open Food Facts nutriments key (per 100g, grams except kcal)
@@ -324,6 +324,16 @@ function openEntryForm(entry, prefill) {
     delete $('entryForm').dataset.servingQty;
   }
 
+  if (!entry && hasProduct) {
+    const gaps = NUTRIENTS.filter(n => n.core && formPer100[n.key] === undefined).length;
+    if (gaps >= 2) {
+      $('aiStatus').classList.remove('hidden');
+      $('aiStatus').textContent =
+        'ℹ️ This product’s database entry is incomplete (' + gaps +
+        ' basics missing). Photograph its nutrition label and tap ✨ to read the exact values.';
+    }
+  }
+
   const source = entry?.nutrients
     || prefill?.nutrients
     || (hasProduct ? scaledNutrients(formPer100, Number($('fAmount').value) || 100) : {});
@@ -479,8 +489,12 @@ function updateAiButton() {
 function aiPrompt(desc) {
   let p = 'You are a nutrition expert using USDA-typical nutrient values. ';
   if (formPhoto) {
-    p += 'Estimate the nutrition of the food in this photo, judging the portion size from ' +
-         'visual cues (plate size, utensils, packaging). ';
+    p += 'If the photo shows a Nutrition Facts or Supplement Facts label, READ the exact ' +
+         'printed values for one serving (set amount_g to the printed serving size, and set ' +
+         'any nutrient the label lists as 0 to 0; nutrients the label does not mention, ' +
+         'estimate from the ingredients or set to 0). Otherwise, estimate the nutrition of ' +
+         'the food in this photo, judging the portion size from visual cues (plate size, ' +
+         'utensils, packaging). ';
     if (desc) p += `The user describes it as: "${desc}". `;
   } else {
     p += `Estimate the nutrition of this food: "${desc}". ` +
@@ -699,6 +713,17 @@ async function aiAnalyze() {
     for (const inp of document.querySelectorAll('#nutrientInputs input')) {
       const v = est[inp.dataset.nkey];
       if (typeof v === 'number' && isFinite(v)) inp.value = +v.toFixed(1);
+    }
+    // Fill gaps in the product's per-100g data so serving-size scaling
+    // (and the My Foods library) keep the AI-read values
+    if (formPer100 && typeof est.amount_g === 'number' && est.amount_g > 0) {
+      for (const n of NUTRIENTS) {
+        const v = est[n.key];
+        if (formPer100[n.key] === undefined && typeof v === 'number' && isFinite(v))
+          formPer100[n.key] = v / est.amount_g * 100;
+      }
+      const grams = Number($('fAmount').value);
+      if (!grams) $('fAmount').value = est.amount_g;
     }
     status.textContent = `✨ Estimated ~${fmt(est.amount_g, 0)} g portion (confidence: ${est.confidence || 'medium'}). Adjust anything that looks off.`;
   } catch (e) {
