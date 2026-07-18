@@ -342,3 +342,7 @@ form input:focus { outline: 2px solid var(--accent); border-color: transparent; 
   background: none; border: none; color: var(--muted); font-size: 17px;
   padding: 6px 8px; cursor: pointer; flex-shrink: 0;
 }
+
+/* Basic foods */
+.basics-cats { flex-wrap: wrap; margin: 0 0 10px; }
+.basics-cats .chip { flex: 0 0 auto; padding: 8px 12px; }

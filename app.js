@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = '2.5';
+const APP_VERSION = '2.6';
 
 /* ---------- Nutrient definitions ----------
    off    = Open Food Facts nutriments key (per 100g, grams except kcal)
@@ -311,9 +311,11 @@ function openEntryForm(entry, prefill) {
     const amount = entry?.amount || prefill?.amount || 100;
     $('fAmount').value = amount;
     const sq = prefill?.servingQty || entry?.servingQty;
+    const sl = prefill?.servingLabel || entry?.servingLabel;
     if (sq) $('entryForm').dataset.servingQty = sq;
+    if (sl) $('entryForm').dataset.servingLabel = sl; else delete $('entryForm').dataset.servingLabel;
     const chips = [['100 g', 100]];
-    if (sq) chips.unshift([`1 serving (${fmt(sq, 0)} g)`, sq]);
+    if (sq) chips.unshift([`${sl || '1 serving'} (${fmt(sq, 0)} g)`, sq]);
     for (const [label, grams] of chips) {
       const b = document.createElement('button');
       b.type = 'button'; b.textContent = label;
@@ -322,6 +324,7 @@ function openEntryForm(entry, prefill) {
     }
   } else {
     delete $('entryForm').dataset.servingQty;
+    delete $('entryForm').dataset.servingLabel;
   }
 
   if (!entry && hasProduct) {
@@ -375,6 +378,7 @@ async function rememberFood(entry, ts) {
     brand: entry.brand || '',
     per100: entry.per100 || prev?.per100 || null,
     servingQty: entry.servingQty || prev?.servingQty || null,
+    servingLabel: entry.servingLabel || prev?.servingLabel || null,
     amount: entry.amount || prev?.amount || null,
     nutrients: entry.nutrients || prev?.nutrients || {},
     barcode: entry.barcode || prev?.barcode || null,
@@ -414,6 +418,7 @@ async function submitEntry(ev) {
     per100: formPer100,
     barcode: formBarcode,
     servingQty: Number($('entryForm').dataset.servingQty) || null,
+    servingLabel: $('entryForm').dataset.servingLabel || null,
     nutrients,
   };
   const wasEdit = !!editingId;
@@ -834,20 +839,130 @@ async function runSearch() {
   }
 }
 
+
+/* ---------- Basic foods (built-in, USDA-typical values per 100 g) ----------
+   n=name c=category s=typical serving grams l=serving label v=per-100g */
+const CAT_ICONS = { protein: '🥩', veg: '🥦', fruit: '🍎', carb: '🍚', dairy: '🥛', nuts: '🥜', drink: '☕' };
+const BASIC_CATS = [
+  ['protein', '🥩 Protein'], ['veg', '🥦 Veggies'], ['fruit', '🍎 Fruits'],
+  ['carb', '🍚 Carbs'], ['dairy', '🥛 Dairy'], ['nuts', '🥜 Nuts & oils'], ['drink', '☕ Drinks'],
+];
+const BASIC_FOODS = [
+  { n: 'Egg', c: 'protein', s: 50, l: '1 large egg', v: { kcal: 143, protein: 12.6, carbs: 0.7, fat: 9.5, sugar: 0.4, satfat: 3.1, cholesterol: 372, sodium: 142, vita: 160, vitd: 2, vitb12: 0.9 } },
+  { n: 'Egg white', c: 'protein', s: 33, l: '1 egg white', v: { kcal: 52, protein: 10.9, carbs: 0.7, fat: 0.2, sodium: 166 } },
+  { n: 'Chicken breast (cooked)', c: 'protein', s: 140, l: '1 breast', v: { kcal: 165, protein: 31, carbs: 0, fat: 3.6, satfat: 1, cholesterol: 85, sodium: 74, potassium: 256 } },
+  { n: 'Ground beef 90% (cooked)', c: 'protein', s: 110, l: '4 oz', v: { kcal: 217, protein: 26, carbs: 0, fat: 12, satfat: 4.7, cholesterol: 86, iron: 2.4, zinc: 6, vitb12: 2.5 } },
+  { n: 'Steak, sirloin (cooked)', c: 'protein', s: 170, l: '6 oz', v: { kcal: 212, protein: 29, carbs: 0, fat: 10, satfat: 3.9, cholesterol: 89, iron: 1.6, zinc: 5.5 } },
+  { n: 'Salmon (cooked)', c: 'protein', s: 140, l: '1 fillet', v: { kcal: 206, protein: 22, carbs: 0, fat: 12, satfat: 2.5, cholesterol: 63, potassium: 384, vitd: 13 } },
+  { n: 'Tuna (canned in water)', c: 'protein', s: 120, l: '1 can drained', v: { kcal: 116, protein: 25.5, carbs: 0, fat: 0.8, sodium: 338, vitd: 1.7, vitb12: 2.5 } },
+  { n: 'Shrimp (cooked)', c: 'protein', s: 85, l: '~9 large', v: { kcal: 99, protein: 24, carbs: 0.2, fat: 0.3, cholesterol: 189, sodium: 111 } },
+  { n: 'Turkey breast', c: 'protein', s: 85, l: '3 oz', v: { kcal: 135, protein: 30, carbs: 0, fat: 0.7, sodium: 99 } },
+  { n: 'Bacon (cooked)', c: 'protein', s: 16, l: '2 slices', v: { kcal: 541, protein: 37, carbs: 1.4, fat: 42, satfat: 14, sodium: 1717, cholesterol: 110 } },
+  { n: 'Tofu (firm)', c: 'protein', s: 85, l: '¼ block', v: { kcal: 78, protein: 8.9, carbs: 1.5, fat: 4.2, calcium: 201, iron: 1.6 } },
+  { n: 'Whey protein powder', c: 'protein', s: 31, l: '1 scoop', v: { kcal: 375, protein: 75, carbs: 12.5, fat: 3, sugar: 5, calcium: 400 } },
+  { n: 'Celery', c: 'veg', s: 40, l: '1 stalk', v: { kcal: 14, protein: 0.7, carbs: 3, fat: 0.2, sugar: 1.3, fiber: 1.6, sodium: 80, potassium: 260 } },
+  { n: 'Broccoli', c: 'veg', s: 91, l: '1 cup', v: { kcal: 34, protein: 2.8, carbs: 6.6, fat: 0.4, sugar: 1.7, fiber: 2.6, vitc: 89, potassium: 316 } },
+  { n: 'Spinach (raw)', c: 'veg', s: 30, l: '1 cup', v: { kcal: 23, protein: 2.9, carbs: 3.6, fat: 0.4, fiber: 2.2, vita: 469, iron: 2.7, magnesium: 79 } },
+  { n: 'Carrot', c: 'veg', s: 61, l: '1 medium', v: { kcal: 41, protein: 0.9, carbs: 9.6, fat: 0.2, sugar: 4.7, fiber: 2.8, vita: 835, potassium: 320 } },
+  { n: 'Cucumber', c: 'veg', s: 100, l: '⅓ cucumber', v: { kcal: 15, protein: 0.7, carbs: 3.6, fat: 0.1, sugar: 1.7, fiber: 0.5, potassium: 147 } },
+  { n: 'Tomato', c: 'veg', s: 123, l: '1 medium', v: { kcal: 18, protein: 0.9, carbs: 3.9, fat: 0.2, sugar: 2.6, fiber: 1.2, vitc: 14, potassium: 237 } },
+  { n: 'Bell pepper', c: 'veg', s: 119, l: '1 medium', v: { kcal: 26, protein: 1, carbs: 6, fat: 0.3, sugar: 4.2, fiber: 2.1, vitc: 128, vita: 157 } },
+  { n: 'Onion', c: 'veg', s: 110, l: '1 medium', v: { kcal: 40, protein: 1.1, carbs: 9.3, fat: 0.1, sugar: 4.2, fiber: 1.7 } },
+  { n: 'Lettuce (romaine)', c: 'veg', s: 47, l: '1 cup', v: { kcal: 17, protein: 1.2, carbs: 3.3, fat: 0.3, fiber: 2.1, vita: 436 } },
+  { n: 'Avocado', c: 'veg', s: 100, l: '½ avocado', v: { kcal: 160, protein: 2, carbs: 8.5, fat: 14.7, satfat: 2.1, sugar: 0.7, fiber: 6.7, potassium: 485 } },
+  { n: 'Green beans', c: 'veg', s: 100, l: '1 cup', v: { kcal: 31, protein: 1.8, carbs: 7, fat: 0.2, sugar: 3.3, fiber: 2.7, vitc: 12 } },
+  { n: 'Asparagus', c: 'veg', s: 90, l: '6 spears', v: { kcal: 20, protein: 2.2, carbs: 3.9, fat: 0.1, sugar: 1.9, fiber: 2.1 } },
+  { n: 'Mushrooms', c: 'veg', s: 70, l: '1 cup sliced', v: { kcal: 22, protein: 3.1, carbs: 3.3, fat: 0.3, fiber: 1, potassium: 318, vitd: 0.2 } },
+  { n: 'Cauliflower', c: 'veg', s: 107, l: '1 cup', v: { kcal: 25, protein: 1.9, carbs: 5, fat: 0.3, sugar: 1.9, fiber: 2, vitc: 48 } },
+  { n: 'Zucchini', c: 'veg', s: 124, l: '1 cup', v: { kcal: 17, protein: 1.2, carbs: 3.1, fat: 0.3, sugar: 2.5, fiber: 1, vitc: 18 } },
+  { n: 'Kale', c: 'veg', s: 67, l: '1 cup', v: { kcal: 35, protein: 2.9, carbs: 4.4, fat: 1.5, fiber: 4.1, vita: 241, vitc: 93, calcium: 254 } },
+  { n: 'Corn (sweet)', c: 'veg', s: 90, l: '1 ear', v: { kcal: 86, protein: 3.3, carbs: 18.7, fat: 1.4, sugar: 6.3, fiber: 2 } },
+  { n: 'Peas', c: 'veg', s: 80, l: '½ cup', v: { kcal: 81, protein: 5.4, carbs: 14.5, fat: 0.4, sugar: 5.7, fiber: 5.7, vitc: 40 } },
+  { n: 'Potato (baked, with skin)', c: 'carb', s: 173, l: '1 medium', v: { kcal: 93, protein: 2.5, carbs: 21.2, fat: 0.1, sugar: 1.2, fiber: 2.2, potassium: 535, vitc: 9.6 } },
+  { n: 'Sweet potato (baked)', c: 'carb', s: 114, l: '1 medium', v: { kcal: 90, protein: 2, carbs: 20.7, fat: 0.2, sugar: 6.5, fiber: 3.3, vita: 961, potassium: 475 } },
+  { n: 'White rice (cooked)', c: 'carb', s: 158, l: '1 cup', v: { kcal: 130, protein: 2.7, carbs: 28.2, fat: 0.3, fiber: 0.4 } },
+  { n: 'Brown rice (cooked)', c: 'carb', s: 195, l: '1 cup', v: { kcal: 112, protein: 2.3, carbs: 23.5, fat: 0.8, fiber: 1.8, magnesium: 44 } },
+  { n: 'Pasta (cooked)', c: 'carb', s: 140, l: '1 cup', v: { kcal: 158, protein: 5.8, carbs: 30.9, fat: 0.9, fiber: 1.8 } },
+  { n: 'Oats (dry)', c: 'carb', s: 40, l: '½ cup dry', v: { kcal: 389, protein: 16.9, carbs: 66.3, fat: 6.9, sugar: 1, fiber: 10.6, iron: 4.7, magnesium: 177 } },
+  { n: 'Bread, whole wheat', c: 'carb', s: 28, l: '1 slice', v: { kcal: 247, protein: 13, carbs: 41, fat: 3.4, sugar: 4.3, fiber: 6, sodium: 450 } },
+  { n: 'Bread, white', c: 'carb', s: 28, l: '1 slice', v: { kcal: 265, protein: 9, carbs: 49, fat: 3.2, sugar: 5, fiber: 2.7, sodium: 490 } },
+  { n: 'Quinoa (cooked)', c: 'carb', s: 185, l: '1 cup', v: { kcal: 120, protein: 4.4, carbs: 21.3, fat: 1.9, fiber: 2.8, magnesium: 64, iron: 1.5 } },
+  { n: 'Flour tortilla', c: 'carb', s: 49, l: '1 tortilla', v: { kcal: 297, protein: 8, carbs: 49, fat: 7.3, sodium: 600, fiber: 2.9 } },
+  { n: 'Bagel', c: 'carb', s: 105, l: '1 bagel', v: { kcal: 250, protein: 10, carbs: 49, fat: 1.5, sugar: 5, fiber: 2.1, sodium: 430 } },
+  { n: 'Black beans (cooked)', c: 'carb', s: 86, l: '½ cup', v: { kcal: 132, protein: 8.9, carbs: 23.7, fat: 0.5, fiber: 8.7, iron: 2.1, magnesium: 70 } },
+  { n: 'Lentils (cooked)', c: 'carb', s: 99, l: '½ cup', v: { kcal: 116, protein: 9, carbs: 20.1, fat: 0.4, fiber: 7.9, iron: 3.3 } },
+  { n: 'Apple', c: 'fruit', s: 182, l: '1 medium', v: { kcal: 52, protein: 0.3, carbs: 13.8, fat: 0.2, sugar: 10.4, fiber: 2.4, vitc: 4.6 } },
+  { n: 'Banana', c: 'fruit', s: 118, l: '1 medium', v: { kcal: 89, protein: 1.1, carbs: 22.8, fat: 0.3, sugar: 12.2, fiber: 2.6, potassium: 358 } },
+  { n: 'Orange', c: 'fruit', s: 131, l: '1 medium', v: { kcal: 47, protein: 0.9, carbs: 11.8, fat: 0.1, sugar: 9.4, fiber: 2.4, vitc: 53 } },
+  { n: 'Strawberries', c: 'fruit', s: 152, l: '1 cup', v: { kcal: 32, protein: 0.7, carbs: 7.7, fat: 0.3, sugar: 4.9, fiber: 2, vitc: 59 } },
+  { n: 'Blueberries', c: 'fruit', s: 148, l: '1 cup', v: { kcal: 57, protein: 0.7, carbs: 14.5, fat: 0.3, sugar: 10, fiber: 2.4, vitc: 9.7 } },
+  { n: 'Grapes', c: 'fruit', s: 92, l: '1 cup', v: { kcal: 69, protein: 0.7, carbs: 18.1, fat: 0.2, sugar: 15.5, fiber: 0.9 } },
+  { n: 'Watermelon', c: 'fruit', s: 154, l: '1 cup', v: { kcal: 30, protein: 0.6, carbs: 7.6, fat: 0.2, sugar: 6.2, vita: 28, vitc: 8.1 } },
+  { n: 'Peach', c: 'fruit', s: 150, l: '1 medium', v: { kcal: 39, protein: 0.9, carbs: 9.5, fat: 0.3, sugar: 8.4, fiber: 1.5 } },
+  { n: 'Pear', c: 'fruit', s: 178, l: '1 medium', v: { kcal: 57, protein: 0.4, carbs: 15.2, fat: 0.1, sugar: 9.8, fiber: 3.1 } },
+  { n: 'Pineapple', c: 'fruit', s: 165, l: '1 cup', v: { kcal: 50, protein: 0.5, carbs: 13.1, fat: 0.1, sugar: 9.9, fiber: 1.4, vitc: 48 } },
+  { n: 'Mango', c: 'fruit', s: 165, l: '1 cup', v: { kcal: 60, protein: 0.8, carbs: 15, fat: 0.4, sugar: 13.7, fiber: 1.6, vita: 54, vitc: 36 } },
+  { n: 'Milk, 2%', c: 'dairy', s: 244, l: '1 cup', v: { kcal: 50, protein: 3.3, carbs: 4.8, fat: 2, sugar: 4.9, satfat: 1.3, calcium: 120, vitd: 1.1, vitb12: 0.5 } },
+  { n: 'Milk, whole', c: 'dairy', s: 244, l: '1 cup', v: { kcal: 61, protein: 3.2, carbs: 4.8, fat: 3.3, sugar: 5, satfat: 1.9, calcium: 113, vitd: 1.3 } },
+  { n: 'Greek yogurt (plain, nonfat)', c: 'dairy', s: 170, l: '1 container', v: { kcal: 59, protein: 10.2, carbs: 3.6, fat: 0.4, sugar: 3.2, calcium: 110, vitb12: 0.8 } },
+  { n: 'Cheddar cheese', c: 'dairy', s: 28, l: '1 oz', v: { kcal: 403, protein: 24.9, carbs: 1.3, fat: 33.1, satfat: 21, sodium: 621, calcium: 721 } },
+  { n: 'Mozzarella', c: 'dairy', s: 28, l: '1 oz', v: { kcal: 280, protein: 27.5, carbs: 3.1, fat: 17.1, satfat: 10.9, sodium: 627, calcium: 505 } },
+  { n: 'Cottage cheese, 2%', c: 'dairy', s: 113, l: '½ cup', v: { kcal: 84, protein: 11, carbs: 4.3, fat: 2.3, sugar: 4.1, sodium: 330, calcium: 111 } },
+  { n: 'Butter', c: 'dairy', s: 14, l: '1 tbsp', v: { kcal: 717, protein: 0.9, carbs: 0.1, fat: 81.1, satfat: 51, sodium: 643, vita: 684 } },
+  { n: 'Almonds', c: 'nuts', s: 28, l: '~23 almonds', v: { kcal: 579, protein: 21.2, carbs: 21.6, fat: 49.9, satfat: 3.8, sugar: 4.4, fiber: 12.5, calcium: 269, magnesium: 270, vite: 25.6 } },
+  { n: 'Peanut butter', c: 'nuts', s: 32, l: '2 tbsp', v: { kcal: 588, protein: 25.1, carbs: 19.6, fat: 50, satfat: 10, sugar: 9.2, fiber: 6, sodium: 430, magnesium: 154 } },
+  { n: 'Walnuts', c: 'nuts', s: 28, l: '1 oz', v: { kcal: 654, protein: 15.2, carbs: 13.7, fat: 65.2, satfat: 6.1, sugar: 2.6, fiber: 6.7, magnesium: 158 } },
+  { n: 'Peanuts', c: 'nuts', s: 28, l: '1 oz', v: { kcal: 567, protein: 25.8, carbs: 16.1, fat: 49.2, satfat: 6.3, fiber: 8.5, magnesium: 168 } },
+  { n: 'Cashews', c: 'nuts', s: 28, l: '1 oz', v: { kcal: 553, protein: 18.2, carbs: 30.2, fat: 43.9, satfat: 7.8, sugar: 5.9, fiber: 3.3, magnesium: 292, iron: 6.7, zinc: 5.8 } },
+  { n: 'Olive oil', c: 'nuts', s: 14, l: '1 tbsp', v: { kcal: 884, protein: 0, carbs: 0, fat: 100, satfat: 13.8, vite: 14.4 } },
+  { n: 'Coffee (black)', c: 'drink', s: 240, l: '1 cup', v: { kcal: 1, protein: 0.1, carbs: 0, fat: 0, caffeine: 40 } },
+  { n: 'Orange juice', c: 'drink', s: 248, l: '1 cup', v: { kcal: 45, protein: 0.7, carbs: 10.4, fat: 0.2, sugar: 8.4, vitc: 50, potassium: 200 } },
+  { n: 'Coca-Cola', c: 'drink', s: 355, l: '1 can', v: { kcal: 42, protein: 0, carbs: 10.6, fat: 0, sugar: 10.6, caffeine: 9.6, sodium: 4 } },
+  { n: 'Beer', c: 'drink', s: 355, l: '1 can/bottle', v: { kcal: 43, protein: 0.5, carbs: 3.6, fat: 0, alcohol: 3.9 } },
+  { n: 'Red wine', c: 'drink', s: 147, l: '1 glass', v: { kcal: 85, protein: 0.1, carbs: 2.6, fat: 0, sugar: 0.6, alcohol: 10.6 } },
+];
+let basicsCat = null;
+
+function basicPrefill(f) {
+  return { name: f.n, per100: { ...f.v }, servingQty: f.s, servingLabel: f.l, amount: f.s };
+}
+function basicRow(f) {
+  const row = document.createElement('button');
+  row.className = 'entry';
+  row.innerHTML = `<span class="thumb">${CAT_ICONS[f.c]}</span><span class="e-main">
+    <span class="e-name">${esc(f.n)}</span><span class="e-sub">${esc(f.l)}</span></span>
+    <span class="e-kcal">${fmt((f.v.kcal || 0) * f.s / 100, 0)}<small> kcal</small></span>`;
+  row.onclick = () => { closeSheet(); openEntryForm(null, basicPrefill(f)); };
+  return row;
+}
+function renderBasics() {
+  $('basicsCats').innerHTML = BASIC_CATS.map(([k, label]) =>
+    `<button type="button" data-cat="${k}" class="chip ${basicsCat === k ? 'sel' : ''}">${label}</button>`).join('');
+  for (const b of document.querySelectorAll('#basicsCats .chip'))
+    b.onclick = () => { basicsCat = basicsCat === b.dataset.cat ? null : b.dataset.cat; renderBasics(); };
+  const list = $('basicsList');
+  list.innerHTML = '';
+  if (!basicsCat) return;
+  for (const f of BASIC_FOODS.filter(f => f.c === basicsCat)) list.appendChild(basicRow(f));
+}
+
 /* ---------- Add sheet + My Foods library ---------- */
 async function renderMyFoods() {
   const q = $('foodSearch').value.trim().toLowerCase();
   const all = await idbGetAll('foods');
-  $('myFoodsBlock').classList.toggle('hidden', all.length === 0);
+  $('basicsBlock').classList.toggle('hidden', !!q);
   const shown = q
     ? all.filter(f => (f.name + ' ' + f.brand).toLowerCase().includes(q))
         .sort((a, b) => (b.uses || 0) - (a.uses || 0)).slice(0, 25)
     : all.sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0)).slice(0, 8);
   const list = $('recentsList');
   list.innerHTML = '';
+  const basicMatches = q
+    ? BASIC_FOODS.filter(f => (f.n + ' ' + f.l).toLowerCase().includes(q)).slice(0, 12) : [];
   const msg = $('foodSearchMsg');
-  msg.classList.toggle('hidden', !(q && shown.length === 0));
-  if (q && shown.length === 0) msg.textContent = `Nothing logged matching “${q}” yet.`;
+  const nothing = q && shown.length === 0 && basicMatches.length === 0;
+  msg.classList.toggle('hidden', !nothing);
+  if (nothing) msg.textContent = `Nothing matching “${q}” — try the AI or a barcode.`;
   for (const f of shown) {
     const row = document.createElement('div');
     row.className = 'entry';
@@ -864,10 +979,13 @@ async function renderMyFoods() {
     };
     list.appendChild(row);
   }
+  for (const f of basicMatches) list.appendChild(basicRow(f));
 }
 function openSheet() {
   $('foodSearch').value = '';
+  basicsCat = null;
   renderMyFoods();
+  renderBasics();
   $('addSheet').classList.remove('hidden');
 }
 function closeSheet() { $('addSheet').classList.add('hidden'); }

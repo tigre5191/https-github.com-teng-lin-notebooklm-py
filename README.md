@@ -24,6 +24,9 @@ Barcode scans and food searches look up nutrition facts in the free, open
   with a trend chart
 - **My Foods library** — every food and drink you've ever logged is
   remembered and searchable in the + menu; one tap re-logs it
+- **Basic foods** — ~70 built-in staples (egg, potato, sweet potato,
+  celery, chicken breast, banana, coffee…) with USDA-typical nutrition
+  and natural servings, browsable by category — works offline
 - **Goal wizard** — answers a few body questions and calculates your calorie
   and macro targets (Mifflin–St Jeor)
 - **Logging streak** — a 🔥 counter for consecutive days logged

@@ -173,11 +173,16 @@
       <button class="sheet-opt" id="optSearch"><span class="opt-ico">🔎</span>Search</button>
       <button class="sheet-opt" id="optManual"><span class="opt-ico">✏️</span>Manual</button>
     </div>
-    <div id="myFoodsBlock" class="hidden">
+    <div id="myFoodsBlock">
       <h4 class="recents-title">My foods — everything you've logged</h4>
-      <input id="foodSearch" type="search" placeholder="Search your foods & drinks…" autocomplete="off">
+      <input id="foodSearch" type="search" placeholder="Search my foods & basic foods…" autocomplete="off">
       <div id="recentsList" class="recents-list"></div>
       <p id="foodSearchMsg" class="search-msg hidden"></p>
+    </div>
+    <div id="basicsBlock">
+      <h4 class="recents-title">Basic foods — tap a category</h4>
+      <div class="meal-chips basics-cats" id="basicsCats"></div>
+      <div id="basicsList" class="recents-list"></div>
     </div>
   </div>
 </div>
