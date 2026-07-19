@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = '2.6';
+const APP_VERSION = '2.7';
 
 /* ---------- Nutrient definitions ----------
    off    = Open Food Facts nutriments key (per 100g, grams except kcal)
@@ -946,6 +946,174 @@ function renderBasics() {
   for (const f of BASIC_FOODS.filter(f => f.c === basicsCat)) list.appendChild(basicRow(f));
 }
 
+
+/* ---------- Cheat code: fast food (chain-published nutrition per item) ----------
+   Items: [name, kcal, protein, carbs, fat, sodium mg, satfat, sugar, fiber] */
+const FAST_FOOD = [
+  { chain: "McDonald's", ico: '🍟', items: [
+    ['Big Mac', 590, 25, 46, 34, 1050, 11, 9, 3],
+    ['Quarter Pounder with Cheese', 520, 30, 42, 26, 1140, 13, 10, 2],
+    ['McDouble', 400, 22, 33, 20, 920, 9, 7, 2],
+    ['Cheeseburger', 300, 15, 32, 13, 720, 6, 7, 2],
+    ['McChicken', 400, 14, 39, 21, 560, 3.5, 5, 2],
+    ['Chicken McNuggets (10 pc)', 410, 23, 26, 24, 770, 4, 0, 1],
+    ['Filet-O-Fish', 390, 16, 39, 19, 580, 4, 5, 2],
+    ['Fries (medium)', 320, 5, 43, 15, 260, 2, 0, 4],
+    ['Fries (large)', 480, 7, 65, 23, 400, 3, 0, 6],
+    ['Egg McMuffin', 310, 17, 30, 13, 770, 6, 3, 2],
+    ['Hash Browns', 140, 1, 18, 8, 310, 1, 0, 2],
+    ['Oreo McFlurry', 510, 12, 80, 16, 280, 8, 60, 1],
+  ]},
+  { chain: 'Burger King', ico: '👑', items: [
+    ['Whopper', 670, 28, 54, 40, 980, 12, 11, 3],
+    ['Whopper with Cheese', 740, 32, 55, 46, 1340, 16, 11, 3],
+    ['Bacon King', 1150, 61, 50, 79, 2150, 31, 10, 2],
+    ['Royal Crispy Chicken', 620, 32, 51, 33, 1170, 6, 5, 2],
+    ['Chicken Fries (9 pc)', 430, 21, 27, 26, 1050, 4.5, 1, 2],
+    ['Fries (medium)', 380, 5, 53, 17, 570, 2.5, 1, 4],
+    ['Onion Rings (medium)', 410, 5, 51, 21, 1160, 3.5, 5, 3],
+  ]},
+  { chain: "Wendy's", ico: '🍔', items: [
+    ["Dave's Single", 570, 29, 39, 34, 1160, 13, 9, 2],
+    ['Baconator', 960, 58, 40, 66, 1740, 27, 9, 2],
+    ['Jr. Bacon Cheeseburger', 380, 20, 26, 22, 700, 9, 5, 1],
+    ['Spicy Chicken Sandwich', 500, 28, 49, 21, 1280, 4, 6, 3],
+    ['Nuggets (10 pc)', 420, 23, 25, 26, 900, 5, 0, 1],
+    ['Fries (medium)', 420, 6, 56, 19, 480, 3, 0, 5],
+    ['Chili (small)', 240, 15, 19, 11, 890, 4.5, 5, 5],
+    ['Chocolate Frosty (medium)', 580, 15, 98, 15, 270, 9, 79, 1],
+  ]},
+  { chain: 'Taco Bell', ico: '🌮', items: [
+    ['Crunchy Taco', 170, 8, 13, 10, 310, 3.5, 1, 3],
+    ['Soft Taco (beef)', 180, 9, 17, 9, 500, 4, 1, 2],
+    ['Doritos Locos Taco', 170, 8, 13, 10, 360, 3.5, 1, 3],
+    ['Crunchwrap Supreme', 530, 16, 71, 21, 1200, 6, 6, 5],
+    ['Burrito Supreme (beef)', 390, 14, 51, 14, 1110, 6, 4, 7],
+    ['Bean Burrito', 350, 13, 54, 9, 1000, 3.5, 3, 11],
+    ['Chicken Quesadilla', 510, 26, 37, 27, 1250, 12, 3, 3],
+    ['Cheesy Gordita Crunch', 500, 20, 41, 28, 850, 10, 4, 4],
+    ['Nachos BellGrande', 740, 16, 82, 38, 1050, 7, 5, 11],
+  ]},
+  { chain: 'Chick-fil-A', ico: '🐔', items: [
+    ['Chicken Sandwich', 420, 28, 41, 18, 1300, 4, 6, 1],
+    ['Spicy Chicken Sandwich', 450, 28, 45, 19, 1620, 4, 6, 2],
+    ['Grilled Chicken Sandwich', 390, 28, 44, 12, 850, 2, 9, 3],
+    ['Nuggets (8 ct)', 250, 27, 11, 12, 1210, 2.5, 1, 0],
+    ['Nuggets (12 ct)', 380, 40, 16, 18, 1810, 4, 2, 0],
+    ['Grilled Nuggets (8 ct)', 130, 25, 1, 3, 440, 0.5, 1, 0],
+    ['Waffle Fries (medium)', 420, 5, 45, 24, 240, 4, 1, 5],
+    ['Mac & Cheese (medium)', 450, 20, 29, 29, 1210, 16, 3, 1],
+    ['Chick-fil-A Sauce', 140, 0, 6, 13, 170, 2, 6, 0],
+  ]},
+  { chain: 'Chipotle', ico: '🌯', items: [
+    ['Chicken (portion)', 180, 32, 0, 7, 310, 3, 0, 0],
+    ['Steak (portion)', 150, 21, 1, 6, 330, 2.5, 0, 0],
+    ['Carnitas (portion)', 210, 23, 0, 12, 450, 4, 0, 0],
+    ['Barbacoa (portion)', 170, 24, 2, 7, 530, 2.5, 0, 1],
+    ['Sofritas (portion)', 150, 8, 9, 10, 560, 1.5, 5, 3],
+    ['White Rice', 210, 4, 40, 4, 350, 1, 0, 1],
+    ['Brown Rice', 210, 4, 36, 6, 190, 1, 1, 2],
+    ['Black Beans', 130, 8, 22, 1.5, 210, 0, 2, 7],
+    ['Flour Tortilla (burrito)', 320, 9, 50, 9, 600, 3.5, 0, 3],
+    ['Cheese', 110, 6, 1, 8, 190, 5, 0, 0],
+    ['Guacamole', 230, 2, 8, 22, 375, 3.5, 1, 8],
+    ['Chips', 540, 7, 73, 25, 390, 3, 1, 7],
+  ]},
+  { chain: 'Subway', ico: '🥪', items: [
+    ['6" Turkey Breast', 270, 18, 41, 4, 760, 1, 7, 2],
+    ['6" Italian BMT', 390, 19, 40, 16, 1260, 6, 7, 2],
+    ['6" Meatball Marinara', 430, 20, 54, 16, 990, 6, 10, 4],
+    ['6" Tuna', 450, 19, 39, 25, 580, 4.5, 5, 2],
+    ['6" Veggie Delite', 200, 8, 39, 2, 280, 0.5, 5, 3],
+    ['6" Chicken & Bacon Ranch', 570, 35, 42, 28, 1250, 10, 7, 2],
+    ['Chocolate Chip Cookie', 210, 2, 30, 10, 150, 5, 18, 1],
+  ]},
+  { chain: 'KFC', ico: '🍗', items: [
+    ['Original Recipe Breast', 390, 39, 11, 21, 1190, 4.5, 0, 0],
+    ['Original Recipe Drumstick', 130, 12, 3, 8, 430, 1.5, 0, 0],
+    ['Crispy Tender (1 pc)', 140, 11, 8, 7, 480, 1, 0, 0],
+    ['Famous Bowl', 720, 26, 79, 34, 2110, 8, 3, 6],
+    ['Mashed Potatoes with Gravy', 130, 2, 19, 5, 500, 1, 1, 1],
+    ['Biscuit', 180, 4, 23, 8, 530, 6, 2, 1],
+    ['Coleslaw', 170, 1, 14, 12, 180, 2, 10, 2],
+  ]},
+  { chain: 'Popeyes', ico: '🍗', items: [
+    ['Classic Chicken Sandwich', 700, 28, 50, 42, 1440, 14, 7, 2],
+    ['Spicy Chicken Sandwich', 700, 28, 50, 42, 1470, 14, 7, 2],
+    ['Chicken Tenders (3 pc)', 445, 34, 26, 21, 1680, 8, 0, 1],
+    ['Cajun Fries (regular)', 270, 4, 33, 14, 590, 6, 0, 3],
+    ['Red Beans & Rice (regular)', 240, 8, 22, 14, 590, 5, 1, 6],
+    ['Biscuit', 210, 3, 22, 12, 530, 7, 1, 1],
+  ]},
+  { chain: 'In-N-Out', ico: '🍔', items: [
+    ['Hamburger', 390, 16, 39, 19, 650, 5, 10, 3],
+    ['Cheeseburger', 480, 22, 39, 27, 1000, 10, 10, 3],
+    ['Double-Double', 670, 37, 39, 41, 1440, 18, 10, 3],
+    ['Fries', 370, 7, 52, 15, 245, 2, 0, 2],
+    ['Chocolate Shake', 590, 9, 62, 36, 350, 24, 57, 0],
+  ]},
+  { chain: 'Five Guys', ico: '🍔', items: [
+    ['Hamburger', 700, 39, 39, 43, 430, 19.5, 8, 2],
+    ['Cheeseburger', 840, 47, 40, 55, 1050, 26.5, 9, 2],
+    ['Little Hamburger', 480, 23, 39, 26, 380, 11.5, 8, 2],
+    ['Fries (little)', 530, 8, 72, 23, 550, 4, 2, 8],
+    ['Fries (regular)', 950, 15, 131, 41, 960, 7, 4, 15],
+  ]},
+  { chain: "Domino's", ico: '🍕', items: [
+    ['Pepperoni Slice (large, hand tossed)', 300, 12, 34, 12, 680, 5.5, 3, 2],
+    ['Cheese Slice (large, hand tossed)', 270, 11, 33, 10, 550, 4.5, 3, 2],
+    ['2 Pepperoni Slices (large)', 600, 24, 68, 24, 1360, 11, 6, 4],
+    ['Stuffed Cheesy Bread (2 pc)', 250, 9, 25, 12, 470, 5, 2, 1],
+  ]},
+  { chain: 'Starbucks', ico: '☕', items: [
+    ['Caffè Latte (grande, 2%)', 190, 13, 19, 7, 170, 4.5, 18, 0],
+    ['Caramel Macchiato (grande)', 250, 10, 35, 7, 150, 4.5, 33, 0],
+    ['Cold Brew (black, grande)', 5, 0, 0, 0, 15, 0, 0, 0],
+    ['Vanilla Sweet Cream Cold Brew (grande)', 110, 1, 14, 6, 20, 3.5, 14, 0],
+    ['Pumpkin Spice Latte (grande)', 390, 14, 52, 14, 230, 8, 50, 0],
+    ['Bacon & Gouda Sandwich', 360, 17, 34, 18, 780, 8, 3, 1],
+    ['Butter Croissant', 260, 5, 26, 15, 310, 9, 5, 1],
+  ]},
+  { chain: "Dunkin'", ico: '🍩', items: [
+    ['Glazed Donut', 240, 4, 33, 11, 330, 5, 12, 1],
+    ['Boston Kreme Donut', 300, 4, 39, 14, 340, 6, 17, 1],
+    ['Bacon Egg & Cheese Croissant', 560, 20, 40, 36, 1050, 15, 5, 1],
+    ['Iced Coffee (medium, cream & sugar)', 190, 2, 29, 8, 60, 5, 28, 0],
+    ['Original Blend Coffee (black)', 5, 0, 1, 0, 5, 0, 0, 0],
+  ]},
+];
+let cheatChain = null;
+
+function ffPrefill(chain, it) {
+  const [n, kcal, protein, carbs, fat, sodium, satfat, sugar, fiber] = it;
+  const nutrients = { kcal, protein, carbs, fat };
+  if (sodium != null) nutrients.sodium = sodium;
+  if (satfat != null) nutrients.satfat = satfat;
+  if (sugar != null) nutrients.sugar = sugar;
+  if (fiber != null) nutrients.fiber = fiber;
+  return { name: n, brand: chain.chain, nutrients };
+}
+function ffRow(chain, it) {
+  const row = document.createElement('button');
+  row.className = 'entry';
+  row.innerHTML = `<span class="thumb">${chain.ico}</span><span class="e-main">
+    <span class="e-name">${esc(it[0])}</span><span class="e-sub">${esc(chain.chain)}</span></span>
+    <span class="e-kcal">${fmt(it[1], 0)}<small> kcal</small></span>`;
+  row.onclick = () => { closeSheet(); openEntryForm(null, ffPrefill(chain, it)); };
+  return row;
+}
+function renderCheat() {
+  $('cheatChains').innerHTML = FAST_FOOD.map((c, i) =>
+    `<button type="button" data-i="${i}" class="chip ${cheatChain === i ? 'sel' : ''}">${c.ico} ${esc(c.chain)}</button>`).join('');
+  for (const b of document.querySelectorAll('#cheatChains .chip'))
+    b.onclick = () => { const i = +b.dataset.i; cheatChain = cheatChain === i ? null : i; renderCheat(); };
+  const list = $('cheatList');
+  list.innerHTML = '';
+  if (cheatChain === null) return;
+  const chain = FAST_FOOD[cheatChain];
+  for (const it of chain.items) list.appendChild(ffRow(chain, it));
+}
+
 /* ---------- Add sheet + My Foods library ---------- */
 async function renderMyFoods() {
   const q = $('foodSearch').value.trim().toLowerCase();
@@ -957,10 +1125,17 @@ async function renderMyFoods() {
     : all.sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0)).slice(0, 8);
   const list = $('recentsList');
   list.innerHTML = '';
+  $('cheatBlock').classList.toggle('hidden', !!q);
   const basicMatches = q
     ? BASIC_FOODS.filter(f => (f.n + ' ' + f.l).toLowerCase().includes(q)).slice(0, 12) : [];
+  const ffMatches = [];
+  if (q) {
+    for (const chain of FAST_FOOD)
+      for (const it of chain.items)
+        if ((chain.chain + ' ' + it[0]).toLowerCase().includes(q)) ffMatches.push([chain, it]);
+  }
   const msg = $('foodSearchMsg');
-  const nothing = q && shown.length === 0 && basicMatches.length === 0;
+  const nothing = q && shown.length === 0 && basicMatches.length === 0 && ffMatches.length === 0;
   msg.classList.toggle('hidden', !nothing);
   if (nothing) msg.textContent = `Nothing matching “${q}” — try the AI or a barcode.`;
   for (const f of shown) {
@@ -980,12 +1155,15 @@ async function renderMyFoods() {
     list.appendChild(row);
   }
   for (const f of basicMatches) list.appendChild(basicRow(f));
+  for (const [chain, it] of ffMatches.slice(0, 12)) list.appendChild(ffRow(chain, it));
 }
 function openSheet() {
   $('foodSearch').value = '';
   basicsCat = null;
+  cheatChain = null;
   renderMyFoods();
   renderBasics();
+  renderCheat();
   $('addSheet').classList.remove('hidden');
 }
 function closeSheet() { $('addSheet').classList.add('hidden'); }

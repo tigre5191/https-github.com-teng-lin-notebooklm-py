@@ -27,6 +27,9 @@ Barcode scans and food searches look up nutrition facts in the free, open
 - **Basic foods** — ~70 built-in staples (egg, potato, sweet potato,
   celery, chicken breast, banana, coffee…) with USDA-typical nutrition
   and natural servings, browsable by category — works offline
+- **🍔 Cheat code** — 14 major fast-food chains (McDonald's, Chick-fil-A,
+  Chipotle, Taco Bell…) with ~100 signature menu items and their published
+  nutrition, one tap to log
 - **Goal wizard** — answers a few body questions and calculates your calorie
   and macro targets (Mifflin–St Jeor)
 - **Logging streak** — a 🔥 counter for consecutive days logged
