@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, claude/phone-app-github-questions-43dk9c]
+    branches: [main, claude/phone-app-github-questions-43dk9c, claude/police-scanner-speed-traps-4pzyu0]
   workflow_dispatch:
 
 permissions:

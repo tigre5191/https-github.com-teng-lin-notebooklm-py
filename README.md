@@ -1,5 +1,8 @@
 # 🥗 NutriLog
 
+> 🚨 Also in this repo: [**TrapMap**](trapmap/) — a Waze-style speed-trap
+> alert app. Install it from `…github.io/<repo-name>/trapmap/`.
+
 A food & nutrition tracker that lives on your iPhone's home screen. Log everything
 you eat with **photos**, **barcode scanning**, and **full nutrient tracking** —
 not just calories, but protein, carbs, fat, fiber, sugar, sodium, cholesterol,

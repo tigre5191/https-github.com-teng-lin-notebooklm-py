@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>TrapMap — Speed Trap Alerts</title>
+<meta name="description" content="Community-style speed trap map: save police spots, load known speed cameras, get proximity alerts while you drive.">
+<meta name="theme-color" content="#0b1220">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TrapMap">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- Top bar -->
+<header class="topbar">
+  <div class="brand">🚨 TrapMap</div>
+  <div class="topbar-btns">
+    <button id="btnCameras" class="chip" title="Load known speed cameras for this area">📡 Cameras</button>
+    <button id="btnList" class="iconbtn" title="Nearby list">☰</button>
+    <button id="btnSettings" class="iconbtn" title="Settings">⚙</button>
+  </div>
+</header>
+
+<!-- Locate button -->
+<button id="btnLocate" class="fab" title="My location">◎</button>
+
+<!-- Bottom report bar -->
+<nav class="reportbar">
+  <button class="report police" data-type="police">
+    <span class="emoji">👮</span><span>Police</span>
+  </button>
+  <button class="report trap" data-type="trap">
+    <span class="emoji">🪤</span><span>Trap spot</span>
+  </button>
+  <button class="report camera" data-type="camera">
+    <span class="emoji">📷</span><span>Camera</span>
+  </button>
+  <button id="btnDrive" class="report drive">
+    <span class="emoji">🚗</span><span>Drive</span>
+  </button>
+</nav>
+
+<!-- Drive mode overlay -->
+<section id="driveOverlay" class="overlay hidden">
+  <div class="drive-top">
+    <button id="btnExitDrive" class="pill">✕ Exit</button>
+    <div id="driveStatus" class="drive-status">GPS…</div>
+  </div>
+  <div class="speedo">
+    <div id="speedVal">0</div>
+    <div id="speedUnit" class="speed-unit">mph</div>
+  </div>
+  <div id="driveAlert" class="drive-alert hidden">
+    <div id="driveAlertIcon" class="da-icon">👮</div>
+    <div>
+      <div id="driveAlertTitle" class="da-title">Police reported ahead</div>
+      <div id="driveAlertDist" class="da-dist">400 m</div>
+    </div>
+  </div>
+  <div id="driveNearest" class="drive-nearest">No known traps nearby</div>
+  <div class="drive-reports">
+    <button class="report police" data-type="police"><span class="emoji">👮</span><span>Police</span></button>
+    <button class="report trap" data-type="trap"><span class="emoji">🪤</span><span>Trap</span></button>
+    <button class="report camera" data-type="camera"><span class="emoji">📷</span><span>Camera</span></button>
+  </div>
+</section>
+
+<!-- Nearby list sheet -->
+<section id="listSheet" class="sheet hidden">
+  <div class="sheet-head">
+    <h2>Nearby spots</h2>
+    <button class="iconbtn sheet-close" data-close="listSheet">✕</button>
+  </div>
+  <div id="spotList" class="spot-list"></div>
+</section>
+
+<!-- Settings sheet -->
+<section id="settingsSheet" class="sheet hidden">
+  <div class="sheet-head">
+    <h2>Settings</h2>
+    <button class="iconbtn sheet-close" data-close="settingsSheet">✕</button>
+  </div>
+  <div class="settings-body">
+    <label class="setrow">
+      <span>Units</span>
+      <select id="setUnits">
+        <option value="mph">mph / miles</option>
+        <option value="kmh">km/h / km</option>
+      </select>
+    </label>
+    <label class="setrow">
+      <span>Alert distance</span>
+      <select id="setRadius">
+        <option value="300">300 m (~1000 ft)</option>
+        <option value="500">500 m (~⅓ mi)</option>
+        <option value="800">800 m (~½ mi)</option>
+        <option value="1600">1.6 km (~1 mi)</option>
+      </select>
+    </label>
+    <label class="setrow">
+      <span>Police reports expire after</span>
+      <select id="setTtl">
+        <option value="2">2 hours</option>
+        <option value="4">4 hours</option>
+        <option value="8">8 hours</option>
+        <option value="24">24 hours</option>
+      </select>
+    </label>
+    <label class="setrow toggle">
+      <span>Alert sound</span>
+      <input type="checkbox" id="setSound" checked>
+    </label>
+    <label class="setrow toggle">
+      <span>Vibrate</span>
+      <input type="checkbox" id="setVibe" checked>
+    </label>
+
+    <h3>Share spots with friends</h3>
+    <p class="hint">Your reports live only on your phone. Export a file and send it to friends — when they import it, your spots show on their map (and theirs on yours).</p>
+    <div class="btnrow">
+      <button id="btnExport" class="pill">⬆ Export spots</button>
+      <button id="btnImport" class="pill">⬇ Import spots</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+
+    <h3>About</h3>
+    <p class="hint">TrapMap is a personal, Waze-style trap map. <b>Police</b> reports are temporary and expire; <b>Trap spots</b> are places police regularly sit; <b>Cameras</b> are fixed speed / red-light cameras. “📡 Cameras” loads publicly-mapped speed cameras for the visible area from <a href="https://www.openstreetmap.org" target="_blank" rel="noopener">OpenStreetMap</a>. Unlike Waze there is no global crowd behind this app — reports come from you and anyone you swap export files with. Long-press the map to add a spot anywhere. Alerts only fire while the app is open (keep it on the dash in Drive mode).</p>
+    <div class="btnrow">
+      <button id="btnClearAll" class="pill danger">🗑 Delete all my spots</button>
+    </div>
+  </div>
+</section>
+
+<!-- Long-press add menu -->
+<div id="addMenu" class="add-menu hidden">
+  <div class="add-menu-title">Add spot here</div>
+  <button data-type="police">👮 Police</button>
+  <button data-type="trap">🪤 Trap spot</button>
+  <button data-type="camera">📷 Camera</button>
+  <button class="cancel">Cancel</button>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<!-- First-run intro -->
+<section id="intro" class="intro hidden">
+  <div class="intro-card">
+    <div class="intro-icon">🚨</div>
+    <h1>TrapMap</h1>
+    <p>Your personal speed-trap radar:</p>
+    <ul>
+      <li><b>👮 Police</b> — tap when you spot one; it marks your location and expires after a few hours</li>
+      <li><b>🪤 Trap spot</b> — save places police regularly hide</li>
+      <li><b>📷 Cameras</b> — load known speed cameras in your area from OpenStreetMap</li>
+      <li><b>🚗 Drive</b> — big speedometer + sound alerts when you approach any of them</li>
+    </ul>
+    <p class="hint">Reports stay on your phone — share them with friends via Settings → Export. Heads-up: this is your own radar, not Waze's live crowd.</p>
+    <button id="introGo" class="pill go">Let's go</button>
+  </div>
+</section>
+
+<script src="vendor/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
