@@ -5,7 +5,7 @@
 
 'use strict';
 
-const APP_VERSION = '2.7';
+const APP_VERSION = '2.8';
 
 /* ---------- Nutrient definitions ----------
    off    = Open Food Facts nutriments key (per 100g, grams except kcal)
@@ -1058,6 +1058,19 @@ const FAST_FOOD = [
     ['Little Hamburger', 480, 23, 39, 26, 380, 11.5, 8, 2],
     ['Fries (little)', 530, 8, 72, 23, 550, 4, 2, 8],
     ['Fries (regular)', 950, 15, 131, 41, 960, 7, 4, 15],
+  ]},
+  { chain: 'Shake Shack', ico: '🥤', items: [
+    ['ShackBurger (single)', 550, 29, 40, 32, 1230, 13, 8, 1],
+    ['Double ShackBurger', 850, 51, 40, 55, 1810, 24, 8, 1],
+    ['SmokeShack (single)', 700, 37, 41, 44, 1930, 17, 9, 1],
+    ['Hamburger', 480, 25, 38, 25, 890, 10, 7, 1],
+    ["'Shroom Burger", 510, 21, 46, 27, 1250, 12, 8, 2],
+    ['Chicken Shack', 590, 34, 48, 26, 1660, 6, 7, 1],
+    ['Crinkle Cut Fries', 470, 6, 63, 22, 1050, 3, 1, 5],
+    ['Cheese Fries', 660, 12, 66, 38, 1660, 10, 2, 5],
+    ['Hot Dog', 330, 12, 25, 20, 900, 8, 5, 1],
+    ['Vanilla Shake', 680, 16, 65, 40, 350, 26, 55, 0],
+    ['Chocolate Shake', 730, 16, 76, 42, 380, 27, 66, 1],
   ]},
   { chain: "Domino's", ico: '🍕', items: [
     ['Pepperoni Slice (large, hand tossed)', 300, 12, 34, 12, 680, 5.5, 3, 2],
