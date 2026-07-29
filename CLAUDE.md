@@ -1,5 +1,11 @@
 # NutriLog
 
+## Communication
+
+After any long explanation (more than a few paragraphs), end with a
+"**TL;DR**" list of up to 10 short bullets: direct, plain language, no jargon,
+written for an average non-developer reader.
+
 Vanilla-JS PWA (no build step, no framework). NutriLog lives at the repo root;
 TrapMap lives in `trapmap/`. Data stays on-device (localStorage); the only
 vendored dependency is `vendor/zxing.min.js` for barcode scanning. Keep it that
